@@ -1,30 +1,42 @@
+/**
+ * @file sd_driver.c
+ * @brief 
+ *
+ * @author Levy Gabriel da S. G.
+ * @date July 24 2021
+ */
+
+/*
+ * Include section
+ * --------------------
+ * Importing all necessary libraries for the good maintenance of the code
+ */
+
 #include "sd_driver.h"
-#include <stdio.h>
-#include <string.h>
-#include <sys/unistd.h>
-#include <sys/stat.h>
-#include "esp_err.h"
-#include "esp_log.h"
-#include "esp_vfs_fat.h"
 
-#ifndef SD_LIB_INCLUDED 
-#define SD_LIB_INCLUDED // define if SD card libraries were included
-#include "driver/sdspi_host.h"
-#include "driver/spi_common.h"
-#include "sdmmc_cmd.h"
-#include "sdkconfig.h"
-#endif
-
-#ifndef _STAT_H_
-#define _STAT_H_ // define if stat.h library was defined
-#include <sys/stat.h>
-#endif
+/*
+ * Define section
+ * --------------------
+ * Definition of macros to be used gloablly in the code
+ */
 
 #ifndef MOUNT_POINT
-#define MOUNT_POINT "/sdcard"
+    #define MOUNT_POINT "/sdcard"
 #endif
 
+/*
+ * Global variable declaration section
+ * --------------------
+ * Initialize global variables to be used in any part of the code
+ */
+
 static const char *TAG = "example";  // ESP log tag
+
+/*
+ * Function definition section
+ * --------------------
+ * Define early prototyped functions execution code
+ */
 
 char* merge_filename(const char *filename)
 {
