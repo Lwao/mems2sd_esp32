@@ -50,42 +50,38 @@
  * Initialize functions prototypes to later be defined
  */
 
-
-/*
- * Function:  merge_filename 
- * --------------------
- * computes an approximation of pi using:
- *    pi/6 = 1/2 + (1/2 x 3/4) 1/5 (1/2)^3  + (1/2 x 3/4 x 5/6) 1/7 (1/2)^5 +
+/**
+ * @brief Merge filename with appropriate extesion and directory.
  *
- *  n: number of terms in the series to sum
+ * @param filename base filename without directory or extension
  *
- *  returns: the approximate value of pi obtained by suming the first n terms
- *           in the above series
- *           returns zero on error (if n is non-positive)
+ * @return merged filename
  */
 char* merge_filename(const char *filename);
 
 /**
  * @brief Read the counter value of hardware timer, in unit of a given scale.
  *
- * @param group_num Timer group, 0 for TIMERG0 or 1 for TIMERG1
- * @param timer_num Timer index, 0 for hw_timer[0] & 1 for hw_timer[1]
- * @param time Pointer, type of double*, to accept timer counter value, in seconds.
+ * @param filename name of the file to open
+ * @param mode mode of opening the file: "r" read; "w" write; "a" append
  *
- * @return
- *     - ESP_OK Success
- *     - ESP_ERR_INVALID_ARG Parameter error
+ * @return pointer to a open file
  */
 FILE* open_file(const char *filename, char *mode);
 
-/*
-
-*/
+/**
+ * @brief Close file when there is no use to it.
+ *
+ * @param file pointer to file to be closed
+ */
 void close_file(FILE *file);
 
-/*
-
-*/
+/**
+ * @brief Rename a file
+ *
+ * @param actualfname actual filename 
+ * @param targetfname target filename name that will substitute de previous  
+ */
 void rename_file(const char *actualfname, const char *targetfname);
 
 #endif  // _SD_DRIVER_H_

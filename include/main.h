@@ -159,15 +159,62 @@ _Bool flag_rec_started = 0; // flag informing that the recording already started
  * Initialize functions prototypes to later be defined
  */
 
-// functions prototypes
-void initialize_spi_bus();
-void init_spi_bus();
-void sd_card_init();
-void sd_card_end();
 
+/**
+ * @brief Initialize SPI bus
+ * 
+ * @param host pointer to SPI bus host
+ */
+void initialize_spi_bus(sdmmc_host_t* host);
+
+/**
+ * @brief Deinitialize SPI bus
+ * 
+ * @param host pointer to SPI bus host
+ */
+void deinitialize_spi_bus(sdmmc_host_t* host);
+
+/**
+ * @brief Mount SD card filesystem
+ * 
+ * @param host pointer to SPI bus host
+ * @param card pointer to SD card host
+ */
+void initialize_sd_card(sdmmc_host_t* host, sdmmc_host_t* card);
+
+/**
+ * @brief Unmount SD card filesystem
+ * 
+ * @param card pointer to SD card host
+ */
+void deinitialize_sd_card(sdmmc_host_t* card);
+
+/**
+ * @brief Task to capture data from MEMS microphone
+ *
+ * @param pvParameters freeRTOS task parameters
+ */
 void vTaskMEMSmic(void * pvParameters);
+
+/**
+ * @brief Task to save acquired data in SD card
+ *
+ * @param pvParameters freeRTOS task parameters
+ */
 void vTaskSDcard(void * pvParameters);
+
+/**
+ * @brief Task to configure START of recording when receives command to it
+ *
+ * @param pvParameters freeRTOS task parameters
+ */
 void vTaskSTART(void * pvParameters);
+
+/**
+ * @brief Task to configure END of recording when receives command to it
+ *
+ * @param pvParameters freeRTOS task parameters
+ */
 void vTaskEND(void * pvParameters);
 
 
