@@ -73,10 +73,9 @@ FILE* open_file(const char *filename, char *mode)
         return NULL;
     }
 }
-
 void close_file(FILE *file)
 {
-    fclose(file);
+    if(file != NULL){fclose(file);}
     ESP_LOGI(TAG, "File closed");
     return;
 }

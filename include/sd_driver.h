@@ -14,16 +14,7 @@
  *
  *  C_POSIX_LIB_INCLUDED:         standard functionalities
  *  ESP_MANAGEMENT_LIBS_INCLUDED: log messages, error codes and SD filesystem support
- *  SD_LIB_INCLUDED:              enable support to SD card SPI communication
  */
-
-#ifndef SD_LIB_INCLUDED 
-    #define SD_LIB_INCLUDED // define if SD card libraries were included
-    #include "driver/sdspi_host.h"
-    #include "driver/spi_common.h"
-    #include "sdmmc_cmd.h"
-    #include "sdkconfig.h"
-#endif
 
 #ifndef ESP_MANAGEMENT_LIBS_INCLUDED
     #define ESP_MANAGEMENT_LIBS_INCLUDED

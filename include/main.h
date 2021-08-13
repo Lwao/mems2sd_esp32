@@ -92,9 +92,6 @@
 #define MOUNT_POINT "/sdcard"        // SD card mounting point
 #define SPI_DMA_CHAN 1               // DMA channel to be used by the SPI peripheral
 
-#define VREF 1100
-#define SAMPLING_TIME 500
-
 #ifndef USE_SPI_MODE
     #define USE_SPI_MODE    // define SPI mode
     #define PIN_NUM_MISO 19 // SDI - Serial Data In
@@ -137,7 +134,7 @@ sdmmc_host_t host;
 FILE* session_file;
 
 const char mount_point[] = MOUNT_POINT;
-const char* fname = "ex_mems2sd";
+const char* fname = "EX_SD";
 
 // freertos variables
 TaskHandle_t xTaskMEMSmicHandle; // mems microphone [task_handle]
@@ -180,14 +177,14 @@ void deinitialize_spi_bus(sdmmc_host_t* host);
  * @param host pointer to SPI bus host
  * @param card pointer to SD card host
  */
-void initialize_sd_card(sdmmc_host_t* host, sdmmc_host_t* card);
+void initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card);
 
 /**
  * @brief Unmount SD card filesystem
  * 
  * @param card pointer to SD card host
  */
-void deinitialize_sd_card(sdmmc_host_t* card);
+void deinitialize_sd_card(sdmmc_card_t** card);
 
 /**
  * @brief Task to capture data from MEMS microphone

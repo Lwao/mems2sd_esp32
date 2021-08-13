@@ -8,11 +8,25 @@
 
 #include "main.h"
 
-
-
 void app_main(void)
 {  
-    BaseType_t xReturnedTask;
+    // initialize SPI bus and mout SD card
+    initialize_spi_bus(&host);
+    initialize_sd_card(&host, &card);
+    
+    // open new file in append mode
+    session_file = open_file(fname, "a");
+    fprintf(session_file, "hello world!\n");
+
+    // close file in use
+    close_file(session_file);
+    ESP_LOGI(TAG, "File written.\n");
+
+    // dismout SD card and free SPI bus (in the given order) 
+    deinitialize_sd_card(&card);
+    deinitialize_spi_bus(&host);
+    /*
+    BaseType_t xReturnedTask[4];
 
     // configure gpio pins
     gpio_config(&out_conf);
@@ -21,11 +35,24 @@ void app_main(void)
     // set flag informing that the recording is stopped
     flag_rec_started = 0;
 
-    // create start task
-    xReturnedTask = xTaskCreate(vTaskSTART, "taskSTART", configMINIMAL_STACK_SIZE, NULL, 0, &xTaskSTARThandle);
-    
-    if(xReturnedTask == pdFAIL){
-        ESP_LOGE(TAG, "Failed to create task.\n");
+    // create tasks
+    xReturnedTask[0] = xTaskCreate(vTaskSTART, "taskSTART", configMINIMAL_STACK_SIZE, NULL, 0, &xTaskSTARThandle);
+    xReturnedTask[1] = xTaskCreate(vTaskMEMSmic, "taskMEMSmic", configMINIMAL_STACK_SIZE, NULL, 0, &xTaskMEMSmicHandle);
+    xReturnedTask[2] = xTaskCreate(vTaskSDcard, "taskSDcard", configMINIMAL_STACK_SIZE, NULL, 1, &xTaskSDcardHandle);
+    xReturnedTask[2] = xTaskCreate(vTaskEND, "taskEND", configMINIMAL_STACK_SIZE, NULL, 0, &xTaskENDhandle);
+
+    for(int itr=0; itr<4; itr++) // tests if task creation fails
+    {
+        if(xReturnedTask[itr] == pdFAIL){
+            ESP_LOGE(TAG, "Failed to create task %d.\n", itr);
+            while(1);
+        }
+    }
+
+    // create queue
+    xQueueData = xQueueCreate(1,sizeof(long)); // 32 bits = 4 bytes
+    if(xQueueData == NULL){ // tests if queue creation fails
+        ESP_LOGE(TAG, "Failed to create data queue.\n");
         while(1);
     }
 
@@ -41,7 +68,7 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to create binary semaphore for OFF button.\n");
         while(1);
     }
-    
+    */
     /*
     unsigned char aux=0;
     unsigned char sending = 42;
@@ -62,46 +89,28 @@ void app_main(void)
 
 void vTaskSTART(void * pvParameters)
 {
-    BaseType_t xReturnedTask[3];
-    int itr;
-
     while(1)
     {
-        xSemaphoreTake(xSemaphoreBTN_ON,portMAX_DELAY);
+        // button was pressed to turn ON recording
+        xSemaphoreTake(xSemaphoreBTN_ON,portMAX_DELAY); 
 
         // initialize SPI bus and mout SD card
         initialize_spi_bus(&host);
         initialize_sd_card(&host, &card);
 
-        // create tasks
-        xReturnedTask[0] = xTaskCreate(vTaskMEMSmic, "taskMEMSmic", configMINIMAL_STACK_SIZE, NULL, 0, &xTaskMEMSmicHandle);
-        xReturnedTask[1] = xTaskCreate(vTaskSDcard, "taskSDcard", configMINIMAL_STACK_SIZE, NULL, 1, &xTaskSDcardHandle);
-        xReturnedTask[2] = xTaskCreate(vTaskEND, "taskEND", configMINIMAL_STACK_SIZE, NULL, 0, &xTaskENDhandle);
-
-        for(itr=0; itr<3; itr++) // tests if task creation fails
-        {
-            if(xReturnedTask[itr] == pdFAIL){
-                ESP_LOGE(TAG, "Failed to create task %d.\n", itr);
-                while(1);
-            }
-        }
+        // resume tasks for recording mode
+        vTaskResume(xTaskMEMSmicHandle);
+        vTaskResume(xTaskSDcardHandle);
         
-
-        // create queue
-        xQueueData = xQueueCreate(1,sizeof(long)); // 32 bits = 4 bytes
-        if(xQueueData == NULL){ // tests if queue creation fails
-            ESP_LOGE(TAG, "Failed to create data queue.\n");
-            while(1);
-        }
-
         // reset RTC 
         struct tm date = {// call struct with date data
             .tm_sec = 0, // current date (to be fecthed from NTP)
         };
         settimeofday(&date, NULL); // update time
 
-        // open new file
-        session_file = open_file(fname, "a"); // open file in append mode
+        // open new file in append mode
+        session_file = open_file(fname, "a");
+        ESP_LOGI(TAG, "File open.\n");
 
         // set flag informing that the recording already started
         flag_rec_started = 1;
@@ -112,15 +121,20 @@ void vTaskEND(void * pvParameters)
 {
     while(1)
     {
+        // button was pressed to turn OFF recording
         xSemaphoreTake(xSemaphoreBTN_OFF,portMAX_DELAY);
 
-        // close in use file
+        // close file in use
         close_file(session_file);
         ESP_LOGI(TAG, "File written.\n");
         
-        // dismout SD card and free SPI bus (in the order) 
+        // dismout SD card and free SPI bus (in the given order) 
         deinitialize_sd_card(&card);
         deinitialize_spi_bus(&host);
+
+        // suspend tasks for recording mode
+        vTaskSuspend(xTaskMEMSmicHandle);
+        vTaskSuspend(xTaskSDcardHandle);
         
         // set flag informing that the recording is stopped
         flag_rec_started = 0;
@@ -160,7 +174,7 @@ void deinitialize_spi_bus(sdmmc_host_t* host)
     } else {ESP_LOGI(TAG, "SPI not freed.");}
 }
 
-void initialize_sd_card(sdmmc_host_t* host, sdmmc_host_t* card)
+void initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card)
 {
     ESP_LOGI(TAG, "Initializing SD card!");
 
@@ -178,7 +192,7 @@ void initialize_sd_card(sdmmc_host_t* host, sdmmc_host_t* card)
     // slot_config.gpio_cd // if there is card detect (CD) signal
     // slot_config.gpio_wp // if there is write protect (WP) signal
 
-    esp_err_t ret = esp_vfs_fat_sdspi_mount(mount_point, &(*host), &slot_config, &mount_config, &card);
+    esp_err_t ret = esp_vfs_fat_sdspi_mount(mount_point, &(*host), &slot_config, &mount_config, card);
 
     if (ret != ESP_OK) {
         if (ret == ESP_FAIL) {
@@ -191,14 +205,14 @@ void initialize_sd_card(sdmmc_host_t* host, sdmmc_host_t* card)
     }
 
     // card has been initialized, print its properties
-    sdmmc_card_print_info(stdout, card);
+    sdmmc_card_print_info(stdout, *card);
     flag_spi_bus_free = 0; // spi bus busy
 }
 
-void deinitialize_sd_card(sdmmc_host_t* card)
+void deinitialize_sd_card(sdmmc_card_t** card)
 {
     ESP_LOGI(TAG, "Deinitializing SPI bus!");
-    esp_vfs_fat_sdcard_unmount(mount_point, card); // unmount partition and disable SDMMC or SPI peripheral
+    esp_vfs_fat_sdcard_unmount(mount_point, *card); // unmount partition and disable SDMMC or SPI peripheral
     flag_spi_bus_free = 1; // spi bus free
     ESP_LOGI(TAG, "Card unmounted.");
 }
