@@ -115,13 +115,21 @@
     #define PIN_NUM_CS   5  // Chip select
 #endif
 
+#define INIT_SPI_TAG   "init_spi"
+#define DEINIT_SPI_TAG "deinit_spi"
+#define INIT_SD_TAG    "init_sd"
+#define DEINIT_SD_TAG  "deinit_sd"
+#define SD_CARD_TAG    "sd_card"
+#define MEMS_MIC_TAG   "mems_mic"
+#define START_REC_TAG  "start_rec"
+#define END_REC_TAG    "end_rec"
+#define SETUP_APP_TAG  "setup_app"
+
 /*
  * Global variable declaration section
  * --------------------
  * Initialize global variables to be used in any part of the code
  */
-
-static const char *TAG = "example"; // ESP log tag
 
 // config output pin
 gpio_config_t out_conf = {

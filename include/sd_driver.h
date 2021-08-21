@@ -32,6 +32,8 @@
     #include <sys/stat.h>
 #endif //C_POSIX_LIB_INCLUDED
 
+#define SD_DRIVER_TAG "sd_driver"
+
 #ifndef _SD_DRIVER_H_
 #define _SD_DRIVER_H_
 

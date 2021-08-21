@@ -30,7 +30,6 @@
  * Initialize global variables to be used in any part of the code
  */
 
-static const char *TAG = "example";  // ESP log tag
 
 /*
  * Function definition section
@@ -59,18 +58,18 @@ FILE* open_file(const char *filename, char *mode)
         char * name = merge_filename(filename);        
 
         // Open file
-        ESP_LOGI(TAG, "Opening file.");
+        ESP_LOGI(SD_DRIVER_TAG, "Opening file.");
         f = fopen(name, mode);
         free(name);
         if (f == NULL) {
-            ESP_LOGE(TAG, "Failed to open file.");
+            ESP_LOGE(SD_DRIVER_TAG, "Failed to open file.");
             return NULL;
         }
-        ESP_LOGI(TAG, "File opened.");
+        ESP_LOGI(SD_DRIVER_TAG, "File opened.");
         return f;
     } else 
     {
-        ESP_LOGE(TAG, "Invalid file name.");
+        ESP_LOGE(SD_DRIVER_TAG, "Invalid file name.");
         return NULL;
     }
 }
@@ -81,7 +80,7 @@ void close_file(FILE **file)
         fclose(*file);
         *file = NULL;
     }
-    ESP_LOGI(TAG, "File closed.");
+    ESP_LOGI(SD_DRIVER_TAG, "File closed.");
     return;
 }
 
@@ -96,9 +95,9 @@ void rename_file(const char *actualfname, const char *targetfname)
         unlink(targetName);
     }
     // Rename original file
-    ESP_LOGI(TAG, "Renaming file.");
+    ESP_LOGI(SD_DRIVER_TAG, "Renaming file.");
     if (rename(targetName, actualName) != 0) {
-        ESP_LOGE(TAG, "Rename failed.");
+        ESP_LOGE(SD_DRIVER_TAG, "Rename failed.");
         free(targetName);
         free(actualName);
         return;
