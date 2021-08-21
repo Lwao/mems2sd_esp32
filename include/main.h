@@ -52,6 +52,7 @@
     #include "driver/gpio.h"
     #include "driver/periph_ctrl.h"
     #include "driver/timer.h"
+    #include "driver/ledc.h"
 #endif //DRIVERS_INCLUDED
 
 #ifndef SD_LIB_INCLUDED 
@@ -70,28 +71,42 @@
     #include "freertos/semphr.h"
 #endif //FREERTOS_LIB_INCLUDED
 
+#ifndef TIMER_LIB_INCLUDED
+    #define TIMER_LIB_INCLUDED
+    #include "esp_timer.h"
+    #include "esp_sleep.h"
+#endif //TIMER_LIB_INCLUDED
+
 /*
  * Define section
  * --------------------
  * Definition of macros to be used gloablly in the code
  */
-// TIMER_BASE_CLK = 80MHz
-// TIMER_DIVIDER  = 20   // max=17 -> 4.7MHz 
-// TIMER_SCALE    = 4MHz // max=4.8MHz
-#define TIMER_DIVIDER         20 //  Hardware timer clock divider
-#define TIMER_SCALE           (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds
-#define TIMER_INTERVAL0_SEC   1 // sample test interval for the first timer
-#define TEST_WITHOUT_RELOAD   0 // testing will be done without auto reload
-#define TEST_WITH_RELOAD      1 // testing will be done with auto reload
 
-#define GPIO_OUTPUT_IO       GPIO_NUM_18 
-#define GPIO_INPUT_IO        GPIO_NUM_4 
-#define GPIO_OUTPUT_PIN_SEL (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
-#define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_INPUT_IO)  // | (1ULL<<ANOTHER_GPIO)
 
-#define MOUNT_POINT "/sdcard"        // SD card mounting point
-#define SPI_DMA_CHAN 1               // DMA channel to be used by the SPI peripheral
+// timer
+#define TIMER_DIVIDER 20                                //  hardware timer clock divider (TIMER_DIVIDER  = 20/17 -> TIMER_SCALE = 4/4.8MHz
+#define TIMER_SCALE   (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds (TIMER_BASE_CLK = 80MHz)
 
+// pwm clock
+#define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
+#define ULTRASONIC_MODE_CLOCK 4000000     // 3.072MHz - 4.8MHz
+#define MIC_CLOCK_PIN         GPIO_NUM_18 // gpio 18
+
+// gpio
+#define GPIO_OUTPUT_IO        GPIO_NUM_16
+#define GPIO_INPUT_IO1        GPIO_NUM_0 
+#define GPIO_INPUT_IO2        GPIO_NUM_4
+#define GPIO_OUTPUT_PIN_SEL   (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_INPUT_PIN_SEL1    (1ULL<<GPIO_INPUT_IO1)  // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_INPUT_PIN_SEL2    (1ULL<<GPIO_INPUT_IO2)  // | (1ULL<<ANOTHER_GPIO)
+#define ESP_INTR_FLAG_DEFAULT 0
+
+// sd card
+#define MOUNT_POINT "/sdcard" // SD card mounting point
+#define SPI_DMA_CHAN 1        // DMA channel to be used by the SPI peripheral
+
+// spi bus
 #ifndef USE_SPI_MODE
     #define USE_SPI_MODE    // define SPI mode
     #define PIN_NUM_MISO 19 // SDI - Serial Data In
@@ -110,28 +125,73 @@ static const char *TAG = "example"; // ESP log tag
 
 // config output pin
 gpio_config_t out_conf = {
-    .intr_type = GPIO_INTR_DISABLE, // disable interrupt
-    .mode = GPIO_MODE_OUTPUT, // set as input mode
-    .pin_bit_mask = GPIO_OUTPUT_PIN_SEL, // bit mask of pins to set (GPIO18)
-    .pull_down_en = 0, // disable pull-down mode
-    .pull_up_en = 0, // disable pull-up mode
+    .intr_type    = GPIO_INTR_DISABLE,   // disable interrupt
+    .mode         = GPIO_MODE_OUTPUT,    // set as input mode
+    .pin_bit_mask = GPIO_OUTPUT_PIN_SEL, // bit mask of pins to set (GPIO16)
+    .pull_down_en = 0,                   // disable pull-down mode
+    .pull_up_en   = 0,                   // disable pull-up mode
 };
 
-
-// config input pin
-gpio_config_t in_conf = {
-    .intr_type = GPIO_INTR_DISABLE, // disable interrupt
-    .mode = GPIO_MODE_INPUT, // set as input mode
-    .pin_bit_mask = GPIO_INPUT_PIN_SEL, // bit mask of pins to set (GPIO18)
-    .pull_down_en = 1, // enable pull-down mode
-    .pull_up_en = 0, // disable pull-up mode
+// config input pin - button
+gpio_config_t in_conf1 = {
+    .intr_type    = GPIO_INTR_POSEDGE,   // interrupt on rising edge
+    .mode         = GPIO_MODE_INPUT,     // set as input mode
+    .pin_bit_mask = GPIO_INPUT_PIN_SEL1, // bit mask of pins to set (GPIO00)
+    .pull_down_en = 1,                   // enable pull-down mode
+    .pull_up_en   = 0,                   // disable pull-up mode
 };
 
+// config input pin - dataIn from mic
+gpio_config_t in_conf2 = {
+    .intr_type    = GPIO_INTR_DISABLE,   // disable interrupt
+    .mode         = GPIO_MODE_INPUT,     // set as input mode
+    .pin_bit_mask = GPIO_INPUT_PIN_SEL2, // bit mask of pins to set (GPIO04)
+    .pull_down_en = 1,                   // enable pull-down mode
+    .pull_up_en   = 0,                   // disable pull-up mode
+};
+
+// read from microphone timer config
+timer_config_t timer_conf = {
+    .divider     = TIMER_DIVIDER,
+    .counter_dir = TIMER_COUNT_UP,
+    .counter_en  = TIMER_PAUSE,
+    .alarm_en    = TIMER_ALARM_EN,
+    .auto_reload = 1,
+}; // default clock source is APB
+
+// send to microphone low-power mode PWM clock config
+ledc_timer_config_t ledc_timer_low = {
+    .speed_mode      = LEDC_HIGH_SPEED_MODE,
+    .timer_num       = LEDC_TIMER_0,
+    .duty_resolution = 2,
+    .freq_hz         = LOW_POWER_MODE_CLOCK
+};
+
+// send to microphone ultrasonic mode PWM clock config
+ledc_timer_config_t ledc_timer_ultra = {
+    .speed_mode      = LEDC_HIGH_SPEED_MODE,
+    .timer_num       = LEDC_TIMER_0,
+    .duty_resolution = 2,
+    .freq_hz         = ULTRASONIC_MODE_CLOCK
+};
+ 
+// send to microphone PWM clock channel
+ledc_channel_config_t ledc_channel = {
+    .channel    = LEDC_CHANNEL_0,
+    .gpio_num   = MIC_CLOCK_PIN,
+    .speed_mode = LEDC_HIGH_SPEED_MODE,
+    .timer_sel  = LEDC_TIMER_0,
+    .duty       = 2
+};
+
+struct timeval date = {// call struct with date data
+    .tv_sec = 0, // current date (to be fecthed from NTP)
+};
 
 // sd card variables
 sdmmc_card_t* card;
 sdmmc_host_t host;
-FILE* session_file;
+FILE* session_file = NULL;
 
 const char mount_point[] = MOUNT_POINT;
 const char* fname = "EX_SD";
@@ -143,8 +203,9 @@ TaskHandle_t xTaskSTARThandle; // starting routine [task_handle]
 TaskHandle_t xTaskENDhandle; // ending routine [task_handle]
 
 QueueHandle_t xQueueData; // data queue for transfering microphone data to sd card [queue_handle]
-SemaphoreHandle_t xSemaphoreBTN_ON; // semaphore to interpret button as start button [semaphore_handle]
-SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button [semaphore_handle]
+SemaphoreHandle_t xSemaphoreBTN_ON; // semaphore to interpret button as start button interrupt [semaphore_handle]
+SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button interrupt [semaphore_handle]
+SemaphoreHandle_t xSemaphoreTimer; // semaphore to interpret timer got interrupt [semaphore_handle]
 
 // flags
 _Bool flag_spi_bus_free = 0;     // flag if there are devices attached to SPI bus or not
@@ -213,6 +274,16 @@ void vTaskSTART(void * pvParameters);
  * @param pvParameters freeRTOS task parameters
  */
 void vTaskEND(void * pvParameters);
+
+/**
+ * @brief Interrupt service routine for button pressed (associated with BOOT button a.k.a GPIO0)
+ */
+static void IRAM_ATTR ISR_BTN();
+
+/**
+ * @brief Interrupt service routine for MEMS microphone timer
+ */
+static bool IRAM_ATTR ISR_TIMER();
 
 
 #endif //_MAIN_H_

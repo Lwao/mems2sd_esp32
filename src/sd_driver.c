@@ -59,24 +59,29 @@ FILE* open_file(const char *filename, char *mode)
         char * name = merge_filename(filename);        
 
         // Open file
-        ESP_LOGI(TAG, "Opening file");
+        ESP_LOGI(TAG, "Opening file.");
         f = fopen(name, mode);
         free(name);
         if (f == NULL) {
-            ESP_LOGE(TAG, "Failed to open file");
+            ESP_LOGE(TAG, "Failed to open file.");
             return NULL;
         }
+        ESP_LOGI(TAG, "File opened.");
         return f;
     } else 
     {
-        ESP_LOGE(TAG, "Invalid file name");
+        ESP_LOGE(TAG, "Invalid file name.");
         return NULL;
     }
 }
-void close_file(FILE *file)
+
+void close_file(FILE **file)
 {
-    if(file != NULL){fclose(file);}
-    ESP_LOGI(TAG, "File closed");
+    if(*file != NULL){
+        fclose(*file);
+        *file = NULL;
+    }
+    ESP_LOGI(TAG, "File closed.");
     return;
 }
 
@@ -91,9 +96,9 @@ void rename_file(const char *actualfname, const char *targetfname)
         unlink(targetName);
     }
     // Rename original file
-    ESP_LOGI(TAG, "Renaming file");
+    ESP_LOGI(TAG, "Renaming file.");
     if (rename(targetName, actualName) != 0) {
-        ESP_LOGE(TAG, "Rename failed");
+        ESP_LOGE(TAG, "Rename failed.");
         free(targetName);
         free(actualName);
         return;

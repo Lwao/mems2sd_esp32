@@ -8,42 +8,48 @@
 
 #include "main.h"
 
+/*
+ * Main section
+ * --------------------
+ * Main function with general single time configuration in BOOT time
+ */
+
+
 void app_main(void)
 {  
-    // initialize SPI bus and mout SD card
-    initialize_spi_bus(&host);
-    initialize_sd_card(&host, &card);
-    
-    // open new file in append mode
-    session_file = open_file(fname, "a");
-    fprintf(session_file, "hello world!\n");
-
-    // close file in use
-    close_file(session_file);
-    ESP_LOGI(TAG, "File written.\n");
-
-    // dismout SD card and free SPI bus (in the given order) 
-    deinitialize_sd_card(&card);
-    deinitialize_spi_bus(&host);
-    /*
     BaseType_t xReturnedTask[4];
 
     // configure gpio pins
-    gpio_config(&out_conf);
-    gpio_config(&in_conf);
-    
+    ESP_ERROR_CHECK(gpio_config(&out_conf));                             // initialize output pin configuration
+    ESP_ERROR_CHECK(gpio_config(&in_conf1));                              // initialize input pin 1 configuration
+    ESP_ERROR_CHECK(gpio_config(&in_conf2));                              // initialize input pin 2 configuration
+    ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT));    // install gpio isr service
+    ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_INPUT_IO1, ISR_BTN, NULL)); // hook isr handler for specific gpio pin
+    //ESP_ERROR_CHECK(gpio_isr_handler_remove(GPIO_INPUT_IO));           // remove isr handler for gpio number
+
+    // configure timer
+    ESP_ERROR_CHECK(timer_init(TIMER_GROUP_0, TIMER_0, &timer_conf));                    // initialize timer
+    ESP_ERROR_CHECK(timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0));                 // start value for counting
+    ESP_ERROR_CHECK(timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, 1));                   // interrupt value to fire isr
+    ESP_ERROR_CHECK(timer_enable_intr(TIMER_GROUP_0, TIMER_0));                          // enable timer interruption
+    ESP_ERROR_CHECK(timer_isr_callback_add(TIMER_GROUP_0, TIMER_0, ISR_TIMER, NULL, 0)); // associate ISR callback function to timer
+
+    // configure PWM clock - low-power mode
+    ledc_timer_config(&ledc_timer_low);
+    ledc_channel_config(&ledc_channel);
+
     // set flag informing that the recording is stopped
     flag_rec_started = 0;
 
     // create tasks
-    xReturnedTask[0] = xTaskCreate(vTaskSTART, "taskSTART", configMINIMAL_STACK_SIZE, NULL, 0, &xTaskSTARThandle);
-    xReturnedTask[1] = xTaskCreate(vTaskMEMSmic, "taskMEMSmic", configMINIMAL_STACK_SIZE, NULL, 0, &xTaskMEMSmicHandle);
-    xReturnedTask[2] = xTaskCreate(vTaskSDcard, "taskSDcard", configMINIMAL_STACK_SIZE, NULL, 1, &xTaskSDcardHandle);
-    xReturnedTask[2] = xTaskCreate(vTaskEND, "taskEND", configMINIMAL_STACK_SIZE, NULL, 0, &xTaskENDhandle);
+    xReturnedTask[0] = xTaskCreate(vTaskSTART, "taskSTART", 2048, NULL, 3, &xTaskSTARThandle);
+    xReturnedTask[1] = xTaskCreate(vTaskMEMSmic, "taskMEMSmic", 4096, NULL, 0, &xTaskMEMSmicHandle);
+    xReturnedTask[2] = xTaskCreate(vTaskSDcard, "taskSDcard", 4096, NULL, 1, &xTaskSDcardHandle);
+    xReturnedTask[3] = xTaskCreate(vTaskEND, "taskEND", 2048, NULL, 3, &xTaskENDhandle);
 
-    for(int itr=0; itr<4; itr++) // tests if task creation fails
+    for(int itr=0; itr<4; itr++) // itreate over tasks 
     {
-        if(xReturnedTask[itr] == pdFAIL){
+        if(xReturnedTask[itr] == pdFAIL){ // tests if task creation fails
             ESP_LOGE(TAG, "Failed to create task %d.\n", itr);
             while(1);
         }
@@ -59,6 +65,7 @@ void app_main(void)
     // create binary semaphores
     xSemaphoreBTN_ON = xSemaphoreCreateBinary();
     xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
+    xSemaphoreTimer = xSemaphoreCreateBinary();
     
     if(xSemaphoreBTN_ON == NULL){ // tests if semaphore creation fails
         ESP_LOGE(TAG, "Failed to create binary semaphore for ON button.\n");
@@ -68,13 +75,114 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to create binary semaphore for OFF button.\n");
         while(1);
     }
-    */
+    if(xSemaphoreTimer == NULL){ // tests if semaphore creation fails
+        ESP_LOGE(TAG, "Failed to create binary semaphore for timer.\n");
+        while(1);
+    }
+    
+    ESP_LOGI(TAG, "Successful BOOT!");
+}
+
+/*
+ * freeRTOS section
+ * --------------------
+ * Declaration of freeRTOS tasks
+ */
+
+void vTaskSTART(void * pvParameters)
+{
+    while(1)
+    {
+        BaseType_t xHighPriorityTaskWoken = pdFALSE;
+        if(xSemaphoreBTN_ON!=NULL)
+        {
+            // button was pressed to turn ON recording
+            xSemaphoreTakeFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken);
+
+            ESP_LOGI(TAG, "Recording session started.");
+
+            // initialize SPI bus and mout SD card
+            initialize_spi_bus(&host);
+            initialize_sd_card(&host, &card);
+
+            // resume tasks for recording mode
+            vTaskResume(xTaskMEMSmicHandle);
+            vTaskResume(xTaskSDcardHandle);
+            
+            // reset RTC 
+            settimeofday(&date, NULL); // update time
+            
+            // open new file in append mode
+            while(session_file==NULL){session_file = open_file(fname, "a");}
+            fprintf(session_file, "Tired, aren't ya?\n");
+
+            // set flag informing that the recording already started
+            flag_rec_started = 1;
+
+            // configure PWM clock - ultrasonic mode
+            ledc_timer_config(&ledc_timer_ultra);
+            ledc_channel_config(&ledc_channel);
+
+            // start timer
+            ESP_ERROR_CHECK(timer_start(TIMER_GROUP_0, TIMER_0));
+        }
+    }
+}
+
+void vTaskEND(void * pvParameters)
+{
+    while(1)
+    {
+        BaseType_t xHighPriorityTaskWoken = pdFALSE;
+        if(xSemaphoreBTN_OFF!=NULL)
+        {
+            // button was pressed to turn OFF recording
+            xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken);
+
+            // stop timer
+            ESP_ERROR_CHECK(timer_pause(TIMER_GROUP_0, TIMER_0));
+
+            // configure PWM clock - low-power mode
+            ledc_timer_config(&ledc_timer_low);
+            ledc_channel_config(&ledc_channel);
+            
+            ESP_LOGI(TAG, "Recording session finished.");
+
+            // close file in use
+            close_file(&session_file);
+            
+            // dismout SD card and free SPI bus (in the given order) 
+            deinitialize_sd_card(&card);
+            deinitialize_spi_bus(&host);
+
+            // suspend tasks for recording mode
+            vTaskSuspend(xTaskMEMSmicHandle);
+            vTaskSuspend(xTaskSDcardHandle);
+            
+            // set flag informing that the recording is stopped
+            flag_rec_started = 0;
+        }
+    }
+}
+
+void vTaskMEMSmic(void * pvParameters)
+{
+    while(1)
+    {
+        BaseType_t xHighPriorityTaskWoken = pdFALSE;
+        int data;
+        if(xSemaphoreTimer!=NULL)
+        {
+            // timer reached counting
+            xSemaphoreTakeFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken);
+            ESP_LOGI(TAG, "Hello MEMS mic!\n");
+            data = 42;
+            xQueueSend(xQueueData,&data,portMAX_DELAY);
+        }
+    }
     /*
     unsigned char aux=0;
     unsigned char sending = 42;
-    gpio_config(&out_conf);
-    gpio_config(&in_conf);
-
 
     for(int itr=0; itr<8; itr++)
     {
@@ -83,63 +191,53 @@ void app_main(void)
         aux = (aux<<1) | gpio_get_level(GPIO_INPUT_IO); // append 1-bit
         printf("still running: %d\n", aux);
     }
-    printf("end running: %d\n", aux);
+    printf("end running: %d\n", aux); // queue this value
     */
 }
 
-void vTaskSTART(void * pvParameters)
+void vTaskSDcard(void * pvParameters)
 {
     while(1)
     {
-        // button was pressed to turn ON recording
-        xSemaphoreTake(xSemaphoreBTN_ON,portMAX_DELAY); 
-
-        // initialize SPI bus and mout SD card
-        initialize_spi_bus(&host);
-        initialize_sd_card(&host, &card);
-
-        // resume tasks for recording mode
-        vTaskResume(xTaskMEMSmicHandle);
-        vTaskResume(xTaskSDcardHandle);
-        
-        // reset RTC 
-        struct tm date = {// call struct with date data
-            .tm_sec = 0, // current date (to be fecthed from NTP)
-        };
-        settimeofday(&date, NULL); // update time
-
-        // open new file in append mode
-        session_file = open_file(fname, "a");
-        ESP_LOGI(TAG, "File open.\n");
-
-        // set flag informing that the recording already started
-        flag_rec_started = 1;
+        int data, time;
+        if(xQueueData!=NULL)
+        {
+            if(xQueueReceive(xQueueData,&data,portMAX_DELAY)==pdTRUE){
+                ESP_LOGI(TAG, "Hello SD card!");
+                time = esp_timer_get_time();
+                fprintf(session_file, "%d, %d\n", time, data);
+            }
+            else{ESP_LOGI(TAG, "Timeout.");}
+        }
     }
 }
 
-void vTaskEND(void * pvParameters)
+/*
+ * ISR section
+ * --------------------
+ * Declaration of interrupt service routines from push-buttons, timers, etc.
+ */
+
+static void IRAM_ATTR ISR_BTN()
 {
-    while(1)
-    {
-        // button was pressed to turn OFF recording
-        xSemaphoreTake(xSemaphoreBTN_OFF,portMAX_DELAY);
-
-        // close file in use
-        close_file(session_file);
-        ESP_LOGI(TAG, "File written.\n");
-        
-        // dismout SD card and free SPI bus (in the given order) 
-        deinitialize_sd_card(&card);
-        deinitialize_spi_bus(&host);
-
-        // suspend tasks for recording mode
-        vTaskSuspend(xTaskMEMSmicHandle);
-        vTaskSuspend(xTaskSDcardHandle);
-        
-        // set flag informing that the recording is stopped
-        flag_rec_started = 0;
-    }
+    BaseType_t xHighPriorityTaskWoken = pdFALSE;
+    if(flag_rec_started){xSemaphoreGiveFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken);} // recording started, so stop recording
+    else{xSemaphoreGiveFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken);} // recording stopd, so start recording
+    portYIELD_FROM_ISR(xHighPriorityTaskWoken);
 }
+
+static bool IRAM_ATTR ISR_TIMER()
+{
+    BaseType_t xHighPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken);
+    return xHighPriorityTaskWoken == pdTRUE;
+}
+
+/*
+ * Peripheral section
+ * --------------------
+ * Declaration of functions responsible to (de)initializa peripherals such as SPI bus or SD card host
+ */
 
 void initialize_spi_bus(sdmmc_host_t* host)
 {
@@ -217,11 +315,4 @@ void deinitialize_sd_card(sdmmc_card_t** card)
     ESP_LOGI(TAG, "Card unmounted.");
 }
 
-void IRAM_ATTR ISR_BTN()
-{
-  BaseType_t xHighPriorityTaskWoken = pdTRUE;
-  if(flag_rec_started){xSemaphoreGiveFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken);}
-  else{xSemaphoreGiveFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken);}
-  if(xHighPriorityTaskWoken == pdTRUE){portYIELD_FROM_ISR();}
-}
 

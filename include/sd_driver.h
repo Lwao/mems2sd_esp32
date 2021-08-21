@@ -65,7 +65,7 @@ FILE* open_file(const char *filename, char *mode);
  *
  * @param file pointer to file to be closed
  */
-void close_file(FILE *file);
+void close_file(FILE **file);
 
 /**
  * @brief Rename a file
