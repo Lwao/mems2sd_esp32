@@ -80,9 +80,10 @@
 /*
  * Define section
  * --------------------
- * Definition of macros to be used gloablly in the code
+ * Definition of macros to be used globally in the code
  */
 
+// TODO: another alternative is to set TIMER_DIVIDER to 1 and the timer need to count up to 20 to fire the isr
 
 // timer
 #define TIMER_DIVIDER 20                                //  hardware timer clock divider (TIMER_DIVIDER  = 20/17 -> TIMER_SCALE = 4/4.8MHz
@@ -94,16 +95,16 @@
 #define MIC_CLOCK_PIN         GPIO_NUM_18 // gpio 18
 
 // gpio
-#define GPIO_OUTPUT_IO        GPIO_NUM_16
-#define GPIO_INPUT_IO1        GPIO_NUM_0 
-#define GPIO_INPUT_IO2        GPIO_NUM_4
-#define GPIO_OUTPUT_PIN_SEL   (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
-#define GPIO_INPUT_PIN_SEL1    (1ULL<<GPIO_INPUT_IO1)  // | (1ULL<<ANOTHER_GPIO)
-#define GPIO_INPUT_PIN_SEL2    (1ULL<<GPIO_INPUT_IO2)  // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_OUTPUT_IO          GPIO_NUM_16
+#define GPIO_INPUT_IO1          GPIO_NUM_0 
+#define GPIO_INPUT_IO2          GPIO_NUM_4
+#define GPIO_OUTPUT_PIN_SEL     (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_INPUT_PIN_SEL1     (1ULL<<GPIO_INPUT_IO1) // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_INPUT_PIN_SEL2     (1ULL<<GPIO_INPUT_IO2) // | (1ULL<<ANOTHER_GPIO)
 #define ESP_INTR_FLAG_DEFAULT 0
 
 // sd card
-#define MOUNT_POINT "/sdcard" // SD card mounting point
+#define MOUNT_POINT "/sdcard" // SD card mounting directory
 #define SPI_DMA_CHAN 1        // DMA channel to be used by the SPI peripheral
 
 // spi bus
@@ -115,6 +116,7 @@
     #define PIN_NUM_CS   5  // Chip select
 #endif
 
+// log flags
 #define INIT_SPI_TAG   "init_spi"
 #define DEINIT_SPI_TAG "deinit_spi"
 #define INIT_SD_TAG    "init_sd"
@@ -131,7 +133,7 @@
  * Initialize global variables to be used in any part of the code
  */
 
-// config output pin
+// config output pin - no use yet
 gpio_config_t out_conf = {
     .intr_type    = GPIO_INTR_DISABLE,   // disable interrupt
     .mode         = GPIO_MODE_OUTPUT,    // set as input mode
@@ -140,7 +142,7 @@ gpio_config_t out_conf = {
     .pull_up_en   = 0,                   // disable pull-up mode
 };
 
-// config input pin - button
+// config input pin - button (GPIO0 commanded by BOOT button)
 gpio_config_t in_conf1 = {
     .intr_type    = GPIO_INTR_POSEDGE,   // interrupt on rising edge
     .mode         = GPIO_MODE_INPUT,     // set as input mode
@@ -149,7 +151,7 @@ gpio_config_t in_conf1 = {
     .pull_up_en   = 0,                   // disable pull-up mode
 };
 
-// config input pin - dataIn from mic
+// config input pin - PDM output from mic
 gpio_config_t in_conf2 = {
     .intr_type    = GPIO_INTR_DISABLE,   // disable interrupt
     .mode         = GPIO_MODE_INPUT,     // set as input mode
@@ -158,16 +160,16 @@ gpio_config_t in_conf2 = {
     .pull_up_en   = 0,                   // disable pull-up mode
 };
 
-// read from microphone timer config
+// read from microphone timer config (APB is the fafault clock source)
 timer_config_t timer_conf = {
     .divider     = TIMER_DIVIDER,
     .counter_dir = TIMER_COUNT_UP,
     .counter_en  = TIMER_PAUSE,
     .alarm_en    = TIMER_ALARM_EN,
     .auto_reload = 1,
-}; // default clock source is APB
+}; 
 
-// send to microphone low-power mode PWM clock config
+// microphone low-power mode PWM clock config
 ledc_timer_config_t ledc_timer_low = {
     .speed_mode      = LEDC_HIGH_SPEED_MODE,
     .timer_num       = LEDC_TIMER_0,
@@ -175,7 +177,7 @@ ledc_timer_config_t ledc_timer_low = {
     .freq_hz         = LOW_POWER_MODE_CLOCK
 };
 
-// send to microphone ultrasonic mode PWM clock config
+// microphone ultrasonic mode PWM clock config
 ledc_timer_config_t ledc_timer_ultra = {
     .speed_mode      = LEDC_HIGH_SPEED_MODE,
     .timer_num       = LEDC_TIMER_0,
@@ -183,7 +185,7 @@ ledc_timer_config_t ledc_timer_ultra = {
     .freq_hz         = ULTRASONIC_MODE_CLOCK
 };
  
-// send to microphone PWM clock channel
+// PWM clock channel connected to microphone 
 ledc_channel_config_t ledc_channel = {
     .channel    = LEDC_CHANNEL_0,
     .gpio_num   = MIC_CLOCK_PIN,

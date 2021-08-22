@@ -134,8 +134,9 @@ void vTaskSTART(void * pvParameters)
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
 
-            xSemaphoreGive(xSemaphoreBTN_ON);
-            vTaskDelay(pdMS_TO_TICKS(10000));
+            // locking task
+            xSemaphoreGive(xSemaphoreBTN_ON); // return semaphore
+            vTaskSuspend(xTaskSTARThandle); // suspend actual task
         } else {vTaskDelay(pdMS_TO_TICKS(10));}
     }
 }
@@ -169,13 +170,18 @@ void vTaskEND(void * pvParameters)
             // suspend tasks for recording mode
             vTaskSuspend(xTaskMEMSmicHandle);
             vTaskSuspend(xTaskSDcardHandle);
+
+            // resume task to wait for recording trigger
+            vTaskResume(xTaskSTARThandle);
             
             // set flag informing that the recording is stopped
             flag_rec_started = 0;
 
             ESP_LOGI(START_REC_TAG, "Returning to IDLE mode.");
 
-            xSemaphoreGive(xSemaphoreBTN_OFF);
+            // locking task
+            xSemaphoreGive(xSemaphoreBTN_OFF); // return semaphore
+            vTaskSuspend(xTaskENDhandle); // suspend actual task
         } else {vTaskDelay(pdMS_TO_TICKS(10));}
     }
 }
@@ -188,8 +194,6 @@ void vTaskMEMSmic(void * pvParameters)
     {
         if(xSemaphoreTimer!=NULL && xSemaphoreTakeFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken)==pdTRUE) // timer reached counting
         {
-            // timer reached counting
-            //xSemaphoreTakeFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken);
             ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic!\n");
             xQueueSend(xQueueData,&data,portMAX_DELAY);
             xSemaphoreGive(xSemaphoreTimer);
