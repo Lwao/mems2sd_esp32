@@ -86,8 +86,9 @@
 // TODO: another alternative is to set TIMER_DIVIDER to 1 and the timer need to count up to 20 to fire the isr
 
 // timer
-#define TIMER_DIVIDER 20                                //  hardware timer clock divider (TIMER_DIVIDER  = 20/17 -> TIMER_SCALE = 4/4.8MHz
+#define TIMER_DIVIDER 2                                //  hardware timer clock divider (TIMER_DIVIDER  = 20/17 -> TIMER_SCALE = 4/4.8MHz
 #define TIMER_SCALE   (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds (TIMER_BASE_CLK = 80MHz)
+#define TIMER_COUNT   100000
 
 // pwm clock
 #define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz

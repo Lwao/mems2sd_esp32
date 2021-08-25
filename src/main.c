@@ -30,7 +30,7 @@ void app_main(void)
     // configure timer
     ESP_ERROR_CHECK(timer_init(TIMER_GROUP_0, TIMER_0, &timer_conf));                    // initialize timer
     ESP_ERROR_CHECK(timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0));                 // start value for counting
-    ESP_ERROR_CHECK(timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, 1));                   // interrupt value to fire isr
+    ESP_ERROR_CHECK(timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, TIMER_COUNT));         // interrupt value to fire isr
     ESP_ERROR_CHECK(timer_enable_intr(TIMER_GROUP_0, TIMER_0));                          // enable timer interruption
     ESP_ERROR_CHECK(timer_isr_callback_add(TIMER_GROUP_0, TIMER_0, ISR_TIMER, NULL, 0)); // associate ISR callback function to timer
 
@@ -45,7 +45,7 @@ void app_main(void)
     xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART,   "tSTART", 8192, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle,   PRO_CPU_NUM);
     xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskMEMSmic, "tMIC",   8192, NULL, configMAX_PRIORITIES-3, &xTaskMEMSmicHandle, APP_CPU_NUM);
     xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskSDcard,  "tSD",    8192, NULL, configMAX_PRIORITIES-4, &xTaskSDcardHandle,  PRO_CPU_NUM);
-    xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskEND,     "tEND",   8192, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,     PRO_CPU_NUM);
+    xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskEND,     "tEND",   8192, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,     APP_CPU_NUM);
 
     for(int itr=0; itr<4; itr++) // itreate over tasks 
     {
@@ -61,7 +61,7 @@ void app_main(void)
     vTaskSuspend(xTaskENDhandle);
 
     // create queue
-    xQueueData = xQueueCreate(1,sizeof(long)); // 32 bits = 4 bytes
+    xQueueData = xQueueCreate(10,sizeof(long)); // 32 bits = 4 bytes
     if(xQueueData == NULL){ // tests if queue creation fails
         ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.\n");
         while(1);
@@ -101,19 +101,11 @@ void vTaskSTART(void * pvParameters)
     {
         if(xSemaphoreBTN_ON!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn ON recording
         {
-            // button was pressed to turn ON recording
-            //xSemaphoreTakeFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken);
-
             ESP_LOGI(START_REC_TAG, "Starting record session.");
 
             // initialize SPI bus and mout SD card
             initialize_spi_bus(&host);
             initialize_sd_card(&host, &card);
-
-            // resume tasks for recording mode
-            vTaskResume(xTaskMEMSmicHandle);
-            vTaskResume(xTaskSDcardHandle);
-            vTaskResume(xTaskENDhandle);
             
             // reset RTC 
             settimeofday(&date, NULL); // update time
@@ -134,10 +126,15 @@ void vTaskSTART(void * pvParameters)
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
 
+            // resume tasks for recording mode
+            vTaskResume(xTaskMEMSmicHandle);
+            vTaskResume(xTaskSDcardHandle);
+            vTaskResume(xTaskENDhandle);
+
             // locking task
             xSemaphoreGive(xSemaphoreBTN_ON); // return semaphore
             vTaskSuspend(xTaskSTARThandle); // suspend actual task
-        } else {vTaskDelay(pdMS_TO_TICKS(10));}
+        } else {vTaskDelay(1);}
     }
 }
 
@@ -148,8 +145,12 @@ void vTaskEND(void * pvParameters)
     {
         if(xSemaphoreBTN_OFF!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn OFF recording
         {
-            // button was pressed to turn OFF recording
-            //xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken);
+            // resets queue and discard remaining data to avoid sd card task to access it
+            //xQueueReset(xQueueData);
+
+            // suspend tasks for recording mode
+            vTaskSuspend(xTaskMEMSmicHandle);
+            vTaskSuspend(xTaskSDcardHandle);
 
             // stop timer
             ESP_ERROR_CHECK(timer_pause(TIMER_GROUP_0, TIMER_0));
@@ -167,10 +168,6 @@ void vTaskEND(void * pvParameters)
             deinitialize_sd_card(&card);
             deinitialize_spi_bus(&host);
 
-            // suspend tasks for recording mode
-            vTaskSuspend(xTaskMEMSmicHandle);
-            vTaskSuspend(xTaskSDcardHandle);
-
             // resume task to wait for recording trigger
             vTaskResume(xTaskSTARThandle);
             
@@ -182,7 +179,7 @@ void vTaskEND(void * pvParameters)
             // locking task
             xSemaphoreGive(xSemaphoreBTN_OFF); // return semaphore
             vTaskSuspend(xTaskENDhandle); // suspend actual task
-        } else {vTaskDelay(pdMS_TO_TICKS(10));}
+        } else {vTaskDelay(1);}
     }
 }
 
@@ -194,8 +191,8 @@ void vTaskMEMSmic(void * pvParameters)
     {
         if(xSemaphoreTimer!=NULL && xSemaphoreTakeFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken)==pdTRUE) // timer reached counting
         {
-            ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic!\n");
-            xQueueSend(xQueueData,&data,portMAX_DELAY);
+            //ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic!\n");
+            xQueueSend(xQueueData,&data,0);
             xSemaphoreGive(xSemaphoreTimer);
         }
     }
@@ -216,16 +213,17 @@ void vTaskMEMSmic(void * pvParameters)
 
 void vTaskSDcard(void * pvParameters)
 {
-    int data, time;
+    int data;//, time;
     while(1)
     {
-        if(xQueueData!=NULL && xQueueReceive(xQueueData,&data,portMAX_DELAY)==pdTRUE)
+        if(xQueueData!=NULL && xQueueReceive(xQueueData, (void *) &data, 0)==pdTRUE)
         {
-            ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
-            time = esp_timer_get_time();
-            fprintf(session_file, "%d, %d\n", time, data);
-            ESP_LOGI(SD_CARD_TAG, "Line written!");
-        } else {vTaskDelay(pdMS_TO_TICKS(10));}
+            //ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
+            //time = esp_timer_get_time();
+            //fprintf(session_file, "%d, %d\n", time, data);
+            //ESP_LOGI(SD_CARD_TAG, "Line written!");
+            fprintf(session_file, "%d\n", data);
+        } else {vTaskDelay(1);}
     }
 }
 
