@@ -87,12 +87,13 @@
 
 // timer
 #define TIMER_DIVIDER 2                                //  hardware timer clock divider (TIMER_DIVIDER  = 20/17 -> TIMER_SCALE = 4/4.8MHz
-#define TIMER_SCALE   (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds (TIMER_BASE_CLK = 80MHz)
+#define TIMER_SCALE   (TIMER_BASE_CLK / TIMER_DIVIDER) // convert counter value to seconds (TIMER_BASE_CLK = 80MHz)
 #define TIMER_COUNT   100000
 
 // pwm clock
 #define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
 #define ULTRASONIC_MODE_CLOCK 4000000     // 3.072MHz - 4.8MHz
+#define STANDARD_MODE_CLOCK   1500000     // 1.024MHz - 2.475MHz
 #define MIC_CLOCK_PIN         GPIO_NUM_18 // gpio 18
 
 // gpio
@@ -219,8 +220,15 @@ SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end but
 SemaphoreHandle_t xSemaphoreTimer; // semaphore to interpret timer got interrupt [semaphore_handle]
 
 // flags
-_Bool flag_spi_bus_free = 0;     // flag if there are devices attached to SPI bus or not
-_Bool flag_rec_started = 0; // flag informing that the recording already started
+_Bool flags[2] = {0};
+
+// enum containing flags id for flags array
+enum flag_id{SPI_BUS_FREE, // flag indicating if there are devices attached to SPI bus or not
+            REC_STARTED};  // flag informing that the recording session already started
+
+
+//_Bool flag_spi_bus_free = 0; // flag if there are devices attached to SPI bus or not
+//_Bool flag_rec_started = 0; // flag informing that the recording already started
 
 /*
  * Function prototype section
@@ -295,6 +303,5 @@ static void IRAM_ATTR ISR_BTN();
  * @brief Interrupt service routine for MEMS microphone timer
  */
 static bool IRAM_ATTR ISR_TIMER();
-
 
 #endif //_MAIN_H_
