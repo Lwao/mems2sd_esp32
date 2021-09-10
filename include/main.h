@@ -88,21 +88,23 @@
 // timer
 #define TIMER_DIVIDER 2                                //  hardware timer clock divider (TIMER_DIVIDER  = 20/17 -> TIMER_SCALE = 4/4.8MHz
 #define TIMER_SCALE   (TIMER_BASE_CLK / TIMER_DIVIDER) // convert counter value to seconds (TIMER_BASE_CLK = 80MHz)
-#define TIMER_COUNT   1000
+#define TIMER_COUNT   2500                               // 40MHz/TIMER_COUNT
+
+// pins
+#define MIC_CLOCK_PIN  GPIO_NUM_2  // gpio 2 - MEMS MIC clock in
+#define MIC_DATA_PIN   GPIO_NUM_4  // gpio 4  - MEMS MIC data out
+#define BTN_START_END  GPIO_NUM_0  // gpio 0  - button
+#define GPIO_OUTPUT_IO GPIO_NUM_16 // gpio 16 - no use
 
 // pwm clock
 #define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
 #define ULTRASONIC_MODE_CLOCK 4000000     // 3.072MHz - 4.8MHz
-#define STANDARD_MODE_CLOCK   1500000     // 1.024MHz - 2.475MHz
-#define MIC_CLOCK_PIN         GPIO_NUM_2  // gpio 2
+#define STANDARD_MODE_CLOCK   2000000     // 1.024MHz - 2.475MHz
 
 // gpio
-#define GPIO_OUTPUT_IO          GPIO_NUM_16
-#define GPIO_INPUT_IO1          GPIO_NUM_0 
-#define GPIO_INPUT_IO2          GPIO_NUM_4
 #define GPIO_OUTPUT_PIN_SEL     (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
-#define GPIO_INPUT_PIN_SEL1     (1ULL<<GPIO_INPUT_IO1) // | (1ULL<<ANOTHER_GPIO)
-#define GPIO_INPUT_PIN_SEL2     (1ULL<<GPIO_INPUT_IO2) // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_INPUT_PIN_SEL1     (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_INPUT_PIN_SEL2     (1ULL<<MIC_DATA_PIN)   // | (1ULL<<ANOTHER_GPIO)
 #define ESP_INTR_FLAG_DEFAULT 0
 
 // sd card
@@ -186,6 +188,14 @@ ledc_timer_config_t ledc_timer_ultra = {
     .duty_resolution = 2,
     .freq_hz         = ULTRASONIC_MODE_CLOCK
 };
+
+// microphone standard mode PWM clock config
+ledc_timer_config_t ledc_timer_std = {
+    .speed_mode      = LEDC_HIGH_SPEED_MODE,
+    .timer_num       = LEDC_TIMER_0,
+    .duty_resolution = 2,
+    .freq_hz         = STANDARD_MODE_CLOCK
+};
  
 // PWM clock channel connected to microphone 
 ledc_channel_config_t ledc_channel = {
@@ -226,16 +236,11 @@ _Bool flags[2] = {0};
 enum flag_id{SPI_BUS_FREE, // flag indicating if there are devices attached to SPI bus or not
             REC_STARTED};  // flag informing that the recording session already started
 
-
-//_Bool flag_spi_bus_free = 0; // flag if there are devices attached to SPI bus or not
-//_Bool flag_rec_started = 0; // flag informing that the recording already started
-
 /*
  * Function prototype section
  * --------------------
  * Initialize functions prototypes to later be defined
  */
-
 
 /**
  * @brief Initialize SPI bus

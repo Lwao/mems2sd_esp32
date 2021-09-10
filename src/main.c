@@ -19,23 +19,19 @@ void app_main(void)
 {  
     BaseType_t xReturnedTask[4];
 
-    gpio_pullup_en(GPIO_NUM_12); 
-
     // configure gpio pins
-    ESP_ERROR_CHECK(gpio_config(&out_conf));                             // initialize output pin configuration
+    ESP_ERROR_CHECK(gpio_config(&out_conf));                              // initialize output pin configuration
     ESP_ERROR_CHECK(gpio_config(&in_conf1));                              // initialize input pin 1 configuration
     ESP_ERROR_CHECK(gpio_config(&in_conf2));                              // initialize input pin 2 configuration
-    ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT));    // install gpio isr service
-    ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_INPUT_IO1, ISR_BTN, NULL)); // hook isr handler for specific gpio pin
-    //ESP_ERROR_CHECK(gpio_isr_handler_remove(GPIO_INPUT_IO));           // remove isr handler for gpio number
+    ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT));     // install gpio isr service
+    ESP_ERROR_CHECK(gpio_isr_handler_add(BTN_START_END, ISR_BTN, NULL));  // hook isr handler for specific gpio pin
 
     // configure timer
-    ESP_ERROR_CHECK(timer_init(TIMER_GROUP_0, TIMER_0, &timer_conf));                      // initialize timer
-    ESP_ERROR_CHECK(timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0));                   // start value for counting
-    ESP_ERROR_CHECK(timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, TIMER_COUNT));           // interrupt value to fire isr
-    ESP_ERROR_CHECK(timer_enable_intr(TIMER_GROUP_0, TIMER_0));                            // enable timer interruption
+    ESP_ERROR_CHECK(timer_init(TIMER_GROUP_0, TIMER_0, &timer_conf));                                     // initialize timer
+    ESP_ERROR_CHECK(timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0));                                  // start value for counting
+    ESP_ERROR_CHECK(timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, TIMER_COUNT));                          // interrupt value to fire isr
+    ESP_ERROR_CHECK(timer_enable_intr(TIMER_GROUP_0, TIMER_0));                                           // enable timer interruption
     ESP_ERROR_CHECK(timer_isr_callback_add(TIMER_GROUP_0, TIMER_0, ISR_TIMER, NULL, ESP_INTR_FLAG_IRAM)); // associate ISR callback function to timer
-    //ESP_ERROR_CHECK(timer_isr_register(TIMER_GROUP_0, TIMER_0, ISR_TIMER, NULL, ESP_INTR_FLAG_IRAM, NULL)); //
     
     // configure PWM clock - low-power mode
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_low));
@@ -50,7 +46,7 @@ void app_main(void)
     xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskSDcard,  "tSD",    8192, NULL, configMAX_PRIORITIES-4, &xTaskSDcardHandle,  APP_CPU_NUM);
     xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskEND,     "tEND",   8192, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,     APP_CPU_NUM);
 
-    for(int itr=0; itr<4; itr++) // iteeate over tasks 
+    for(int itr=0; itr<4; itr++) // iterate over tasks 
     {
         if(xReturnedTask[itr] == pdFAIL){ // tests if task creation fails
             ESP_LOGE(SETUP_APP_TAG, "Failed to create task %d.\n", itr);
@@ -115,10 +111,11 @@ void vTaskSTART(void * pvParameters)
             
             // open new file in append mode
             while(session_file==NULL){session_file = open_file(fname, "a");}
-            fprintf(session_file, "Tired, aren't ya?\n");
+            fprintf(session_file, "data,time\n");
 
             // configure PWM clock - ultrasonic mode
-            ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_ultra));
+            //ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_ultra));
+            ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_std));
             ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
             // set flag informing that the recording already started
@@ -135,7 +132,6 @@ void vTaskSTART(void * pvParameters)
             ESP_ERROR_CHECK(timer_start(TIMER_GROUP_0, TIMER_0));
 
             // locking task
-            //xSemaphoreGive(xSemaphoreBTN_ON); // return semaphore
             vTaskSuspend(xTaskSTARThandle); // suspend actual task
         } else {vTaskDelay(1);}
     }
@@ -155,7 +151,7 @@ void vTaskEND(void * pvParameters)
             vTaskSuspend(xTaskMEMSmicHandle);
 
             // stuck in loop while the data queue is not empty
-            while(uxQueueMessagesWaitingFromISR(xQueueData)>0) vTaskDelay(1);
+            while(uxQueueMessagesWaitingFromISR(xQueueData)>0) vTaskDelay(10);
 
             // suspend tasks for recording mode
             vTaskSuspend(xTaskSDcardHandle);
@@ -185,7 +181,6 @@ void vTaskEND(void * pvParameters)
             ESP_LOGI(END_REC_TAG, "Returning to IDLE mode.");
 
             // locking task
-            //xSemaphoreGive(xSemaphoreBTN_OFF); // return semaphore
             vTaskSuspend(xTaskENDhandle); // suspend actual task
         } else {vTaskDelay(1);}
     }
@@ -201,7 +196,6 @@ void vTaskMEMSmic(void * pvParameters)
             cntr++;
             ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic, %d!\n", cntr);
             xQueueSend(xQueueData,&cntr,0);
-            //xSemaphoreGive(xSemaphoreTimer);
         } else {vTaskDelay(1);}
     }
     /*
@@ -224,12 +218,12 @@ void vTaskSDcard(void * pvParameters)
     int data;
     while(1)
     {
-        if(xQueueData!=NULL && xQueueReceive(xQueueData, &data, 0)==pdTRUE)
+        while(xQueueData!=NULL && xQueueReceive(xQueueData, &data, 0)==pdTRUE)
         {
             ESP_LOGI(SD_CARD_TAG, "Hello SD card, %d!", data);
-            //fprintf(session_file, "%d\n", data);
-            fprintf(session_file, "Hello folks!\n");
-        } else {vTaskDelay(1);}
+            fprintf(session_file, "%d\n", data);
+        } //else {vTaskDelay(1);}
+        vTaskDelay(1);
     }
 }
 
@@ -265,8 +259,8 @@ void initialize_spi_bus(sdmmc_host_t* host)
     ESP_LOGI(INIT_SPI_TAG, "Initializing SPI bus!");
 
     sdmmc_host_t host_temp = SDSPI_HOST_DEFAULT();
-    host_temp.max_freq_khz = SDMMC_FREQ_PROBING;//100;
-    host_temp.command_timeout_ms = 100;
+    //host_temp.max_freq_khz = SDMMC_FREQ_PROBING;//100;
+    //host_temp.command_timeout_ms = 100;
 
     spi_bus_config_t bus_cfg = {
         .mosi_io_num = PIN_NUM_MOSI,
