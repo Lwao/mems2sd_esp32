@@ -19,6 +19,8 @@ void app_main(void)
 {  
     BaseType_t xReturnedTask[4];
 
+    gpio_pullup_en(GPIO_NUM_12); 
+
     // configure gpio pins
     ESP_ERROR_CHECK(gpio_config(&out_conf));                             // initialize output pin configuration
     ESP_ERROR_CHECK(gpio_config(&in_conf1));                              // initialize input pin 1 configuration
@@ -146,15 +148,20 @@ void vTaskEND(void * pvParameters)
     {
         if(xSemaphoreBTN_OFF!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn OFF recording
         {
-            // resets queue and discard remaining data to avoid sd card task to access it
-            xQueueReset(xQueueData);
-
             // pause timer
             ESP_ERROR_CHECK(timer_pause(TIMER_GROUP_0, TIMER_0));
 
             // suspend tasks for recording mode
             vTaskSuspend(xTaskMEMSmicHandle);
+
+            // stuck in loop while the data queue is not empty
+            while(uxQueueMessagesWaitingFromISR(xQueueData)>0) vTaskDelay(1);
+
+            // suspend tasks for recording mode
             vTaskSuspend(xTaskSDcardHandle);
+
+            // resets queue and discard remaining data to avoid sd card task to access it
+            xQueueReset(xQueueData);
 
             // configure PWM clock - low-power mode
             ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_low));
@@ -191,8 +198,8 @@ void vTaskMEMSmic(void * pvParameters)
     {
         if(xSemaphoreTimer!=NULL && xSemaphoreTakeFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken)==pdTRUE) // timer reached counting
         {
-            ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic!\n");
             cntr++;
+            ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic, %d!\n", cntr);
             xQueueSend(xQueueData,&cntr,0);
             //xSemaphoreGive(xSemaphoreTimer);
         } else {vTaskDelay(1);}
@@ -217,11 +224,11 @@ void vTaskSDcard(void * pvParameters)
     int data;
     while(1)
     {
-        if(xQueueData!=NULL && xQueueReceive(xQueueData, (void *) &data, 0)==pdTRUE)
+        if(xQueueData!=NULL && xQueueReceive(xQueueData, &data, 0)==pdTRUE)
         {
-            ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
-            fprintf(session_file, "%d\n", data);
-            ESP_LOGI(SD_CARD_TAG, "Line written!");
+            ESP_LOGI(SD_CARD_TAG, "Hello SD card, %d!", data);
+            //fprintf(session_file, "%d\n", data);
+            fprintf(session_file, "Hello folks!\n");
         } else {vTaskDelay(1);}
     }
 }
@@ -258,13 +265,16 @@ void initialize_spi_bus(sdmmc_host_t* host)
     ESP_LOGI(INIT_SPI_TAG, "Initializing SPI bus!");
 
     sdmmc_host_t host_temp = SDSPI_HOST_DEFAULT();
+    host_temp.max_freq_khz = SDMMC_FREQ_PROBING;//100;
+    host_temp.command_timeout_ms = 100;
+
     spi_bus_config_t bus_cfg = {
         .mosi_io_num = PIN_NUM_MOSI,
         .miso_io_num = PIN_NUM_MISO,
         .sclk_io_num = PIN_NUM_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 4000,
+        .max_transfer_sz = 8192,
     };
 
     esp_err_t ret = spi_bus_initialize(host_temp.slot, &bus_cfg, SPI_DMA_CHAN);
@@ -294,7 +304,7 @@ void initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card)
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = false, // format if mount failed
         .max_files = 5, // max number of files
-        .allocation_unit_size = 16 * 1024 // 
+        .allocation_unit_size = 16 * 1024, // 
     };
     
     // options for initialize SD SPI device 

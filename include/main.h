@@ -88,13 +88,13 @@
 // timer
 #define TIMER_DIVIDER 2                                //  hardware timer clock divider (TIMER_DIVIDER  = 20/17 -> TIMER_SCALE = 4/4.8MHz
 #define TIMER_SCALE   (TIMER_BASE_CLK / TIMER_DIVIDER) // convert counter value to seconds (TIMER_BASE_CLK = 80MHz)
-#define TIMER_COUNT   100000
+#define TIMER_COUNT   1000
 
 // pwm clock
 #define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
 #define ULTRASONIC_MODE_CLOCK 4000000     // 3.072MHz - 4.8MHz
 #define STANDARD_MODE_CLOCK   1500000     // 1.024MHz - 2.475MHz
-#define MIC_CLOCK_PIN         GPIO_NUM_18 // gpio 18
+#define MIC_CLOCK_PIN         GPIO_NUM_2  // gpio 2
 
 // gpio
 #define GPIO_OUTPUT_IO          GPIO_NUM_16
