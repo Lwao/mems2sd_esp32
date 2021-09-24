@@ -99,7 +99,8 @@
 #define GPIO_OUTPUT_IO GPIO_NUM_16  // gpio 16 - no use
 
 // i2s 
-#define I2S_PORT_NUM 0
+#define I2S_PORT_NUM           0
+#define I2S_DMA_BUFF_LEN_BYTES 1024
 
 // pwm clock
 #define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
@@ -135,6 +136,16 @@
 #define START_REC_TAG  "start_rec"
 #define END_REC_TAG    "end_rec"
 #define SETUP_APP_TAG  "setup_app"
+
+// event flags
+
+#define BIT_(shift) (1<<shift)
+
+enum events{ENABLE_SDCARD_WRITING, // bit indicating that data was read from mic and it is ready to save onto sd card
+            ENABLE_MIC_READING,
+            REC_STARTED,           // flag informing that the recording session already started
+            SPI_BUS_FREE};         // flag indicating if there are devices attached to SPI bus or not
+
 
 /*
  * Global variable declaration section
@@ -235,6 +246,11 @@ struct timeval date = {// call struct with date data
     .tv_sec = 0, // current date (to be fecthed from NTP)
 };
 
+// i2s variables
+size_t bytes_read;
+char *inBuffer;
+char *outBuffer;
+
 // sd card variables
 sdmmc_card_t* card;
 sdmmc_host_t host;
@@ -254,13 +270,6 @@ EventGroupHandle_t xEvents;          //
 SemaphoreHandle_t xSemaphoreBTN_ON;  // semaphore to interpret button as start button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreTimer;   // semaphore to interpret timer got interrupt [semaphore_handle]
-
-// flags
-_Bool flags[2] = {0};
-
-// enum containing flags id for flags array
-enum flag_id{SPI_BUS_FREE, // flag indicating if there are devices attached to SPI bus or not
-             REC_STARTED}; // flag informing that the recording session already started
 
 /*
  * Function prototype section

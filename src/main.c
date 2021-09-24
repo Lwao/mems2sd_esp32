@@ -32,9 +32,9 @@ void app_main(void)
     BaseType_t xReturnedTask[4];
 
     // configure gpio pins
-    ESP_ERROR_CHECK(gpio_config(&out_conf));                              // initialize output pin configuration
-    ESP_ERROR_CHECK(gpio_config(&in_conf1));                              // initialize input pin 1 configuration
-    ESP_ERROR_CHECK(gpio_config(&in_conf2));                              // initialize input pin 2 configuration
+    //ESP_ERROR_CHECK(gpio_config(&out_conf));                              // initialize output pin configuration - no use
+    ESP_ERROR_CHECK(gpio_config(&in_conf1));                              // initialize input pin 1 configuration - on/off button
+    //ESP_ERROR_CHECK(gpio_config(&in_conf2));                              // initialize input pin 2 configuration - mic data in
     ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT));     // install gpio isr service
     ESP_ERROR_CHECK(gpio_isr_handler_add(BTN_START_END, ISR_BTN, NULL));  // hook isr handler for specific gpio pin
 
@@ -44,18 +44,18 @@ void app_main(void)
     ESP_ERROR_CHECK(timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, TIMER_COUNT));                          // interrupt value to fire isr
     ESP_ERROR_CHECK(timer_enable_intr(TIMER_GROUP_0, TIMER_0));                                           // enable timer interruption
     ESP_ERROR_CHECK(timer_isr_callback_add(TIMER_GROUP_0, TIMER_0, ISR_TIMER, NULL, ESP_INTR_FLAG_IRAM)); // associate ISR callback function to timer
-    
+
     // configure i2s
-    ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config, 0, NULL));
-    ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins));
-    ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
+    //ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config, 0, NULL));
+    //ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins));
+    //ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
     // configure PWM clock - low-power mode
     //ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_low));
     //ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
     // set flag informing that the recording is stopped
-    flags[REC_STARTED] = 0;
+    //flags[REC_STARTED] = 0;
 
     // create tasks
     xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART,   "tSTART", 8192, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle,   APP_CPU_NUM);
@@ -97,8 +97,14 @@ void app_main(void)
         while(1);
     }
 
+    inBuffer = (char *)calloc(I2S_DMA_BUFF_LEN_BYTES, sizeof(char));
+    outBuffer = (char *)calloc(I2S_DMA_BUFF_LEN_BYTES, sizeof(char));
+
+    // set flag informing that the recording is stopped
+    xEventGroupClearBits(xEvents, BIT_(REC_STARTED));
     
     ESP_LOGI(SETUP_APP_TAG, "Successful BOOT!");
+    vTaskDelete(NULL);
 }
 
 /*
@@ -125,7 +131,7 @@ void vTaskSTART(void * pvParameters)
             
             // open new file in append mode
             while(session_file==NULL){session_file = open_file(fname, "a");}
-            fprintf(session_file, "data,time\n");
+            //fprintf(session_file, "data,time\n");
 
             // configure PWM clock - ultrasonic mode
             //ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_ultra));
@@ -133,10 +139,10 @@ void vTaskSTART(void * pvParameters)
             //ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
             // set flag informing that the recording already started
-            flags[REC_STARTED] = 1;
+            xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
 
             // start i2s
-            ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));
+            //ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
 
@@ -144,7 +150,7 @@ void vTaskSTART(void * pvParameters)
             vTaskResume(xTaskMEMSmicHandle);
             vTaskResume(xTaskSDcardHandle);
             vTaskResume(xTaskENDhandle);
-
+        
             // start timer
             ESP_ERROR_CHECK(timer_start(TIMER_GROUP_0, TIMER_0));
 
@@ -183,7 +189,7 @@ void vTaskEND(void * pvParameters)
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
             // i2s stop
-            ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
+            //ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
             // close file in use
             close_file(&session_file);
@@ -192,8 +198,8 @@ void vTaskEND(void * pvParameters)
             deinitialize_sd_card(&card);
             deinitialize_spi_bus(&host);
 
-            // set flag informing that the recording is stopped
-            flags[REC_STARTED] = 0;
+            // clear flag informing that the recording is stopped
+            xEventGroupClearBits(xEvents, BIT_(REC_STARTED));
 
             // resume task to wait for recording trigger
             vTaskResume(xTaskSTARThandle);
@@ -211,6 +217,14 @@ void vTaskMEMSmic(void * pvParameters)
     BaseType_t xHighPriorityTaskWoken = pdFALSE;
     while(1)
     {
+        /*
+        xEventGroupWaitBits(xEvents, BIT_(ENABLE_MIC_READING), pdFALSE, pdTRUE, portMAX_DELAY); 
+        i2s_read(I2S_PORT_NUM, (void*) inBuffer, I2S_DMA_BUFF_LEN_BYTES, &bytes_read, portMAX_DELAY); // read bytes from mic with i2s
+        memcpy(outBuffer, inBuffer, I2S_DMA_BUFF_LEN_BYTES); // copy input buffer to output buffer
+        xEventGroupClearBits(xEvents, BIT_(ENABLE_MIC_READING));
+	    xEventGroupSetBits(xEvents, BIT_(ENABLE_SDCARD_WRITING)); // notify sd card task to write data
+        */
+        ///*
         //#include "soc/timer_group_struct.h"
         //#include "soc/timer_group_reg.h"
         //TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE;
@@ -220,10 +234,11 @@ void vTaskMEMSmic(void * pvParameters)
         {
             //inMic.cntr++;
             inMic.cntr = esp_timer_get_time();
-            inMic.reading = gpio_get_level(MIC_DATA_PIN);
+            inMic.reading = 42;//gpio_get_level(MIC_DATA_PIN);
             ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic!");
             xQueueSend(xQueueData,&inMic,0);
         } else {vTaskDelay(1);}
+        //*/
     }
 }
 
@@ -231,12 +246,20 @@ void vTaskSDcard(void * pvParameters)
 {
     while(1)
     {
+	    /*
+        xEventGroupWaitBits(xEvents, BIT_(ENABLE_SDCARD_WRITING), pdFALSE, pdTRUE, portMAX_DELAY); // wait for data to be read
+        fwrite(outBuffer, I2S_DMA_BUFF_LEN_BYTES, 1, session_file); // write output buffer to sd card current file
+        xEventGroupClearBits(xEvents, BIT_(ENABLE_SDCARD_WRITING)); // clear event flag to reaccess task
+        xEventGroupSetBits(xEvents, BIT_(ENABLE_MIC_READING));
+        */
+        ///*
         while(xQueueData!=NULL && xQueueReceive(xQueueData, &inSd, 0)==pdTRUE)
         {
             ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
             fprintf(session_file, "%d,%d\n", inSd.reading, inSd.cntr);
-        } 
+        }
         vTaskDelay(1);
+        //*/
     }
 }
 
@@ -249,7 +272,7 @@ void vTaskSDcard(void * pvParameters)
 static void IRAM_ATTR ISR_BTN()
 {
     BaseType_t xHighPriorityTaskWoken = pdFALSE;
-    if(flags[REC_STARTED]){xSemaphoreGiveFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken);} // recording started, so stop recording
+    if(xEventGroupGetBitsFromISR(xEvents) & BIT_(REC_STARTED)){xSemaphoreGiveFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken);} // recording started, so stop recording
     else{xSemaphoreGiveFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken);} // recording stopd, so start recording
     portYIELD_FROM_ISR(xHighPriorityTaskWoken);
 }
@@ -296,7 +319,7 @@ void initialize_spi_bus(sdmmc_host_t* host)
 void deinitialize_spi_bus(sdmmc_host_t* host)
 {
     ESP_LOGI(DEINIT_SPI_TAG, "Deinitializing SPI bus!");
-    if(flags[SPI_BUS_FREE])
+    if(xEventGroupGetBits(xEvents) & BIT_(SPI_BUS_FREE)) // spi bus is free
     {
         spi_bus_free((*host).slot); //deinitialize the bus after all devices are removed
         ESP_LOGI(DEINIT_SPI_TAG, "SPI bus freed.");
@@ -335,14 +358,14 @@ void initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card)
 
     // card has been initialized, print its properties
     sdmmc_card_print_info(stdout, *card);
-    flags[SPI_BUS_FREE] = 0; // spi bus busy
+    xEventGroupClearBits(xEvents, BIT_(SPI_BUS_FREE)); // spi bus busy
 }
 
 void deinitialize_sd_card(sdmmc_card_t** card)
 {
     ESP_LOGI(DEINIT_SD_TAG, "Demounting SD card!");
     esp_vfs_fat_sdcard_unmount(mount_point, *card); // unmount partition and disable SDMMC or SPI peripheral
-    flags[SPI_BUS_FREE] = 1; // spi bus is free
+    xEventGroupSetBits(xEvents, BIT_(SPI_BUS_FREE)); // spi bus is free
     ESP_LOGI(DEINIT_SD_TAG, "Card unmounted.");
 }
 
