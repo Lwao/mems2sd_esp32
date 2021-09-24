@@ -14,7 +14,19 @@
  * Main function with general single time configuration in BOOT time
  */
 
-int cntr = 0;
+typedef struct
+{
+    int cntr;
+    int reading;
+} data_fmt;
+
+data_fmt inMic =
+{
+    .cntr = 0,
+    .reading = 0,
+};
+data_fmt inSd;
+
 void app_main(void)
 {  
     BaseType_t xReturnedTask[4];
@@ -33,9 +45,14 @@ void app_main(void)
     ESP_ERROR_CHECK(timer_enable_intr(TIMER_GROUP_0, TIMER_0));                                           // enable timer interruption
     ESP_ERROR_CHECK(timer_isr_callback_add(TIMER_GROUP_0, TIMER_0, ISR_TIMER, NULL, ESP_INTR_FLAG_IRAM)); // associate ISR callback function to timer
     
+    // configure i2s
+    ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config, 0, NULL));
+    ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins));
+    ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
+
     // configure PWM clock - low-power mode
-    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_low));
-    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+    //ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_low));
+    //ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
     // set flag informing that the recording is stopped
     flags[REC_STARTED] = 0;
@@ -59,30 +76,27 @@ void app_main(void)
     vTaskSuspend(xTaskSDcardHandle);
     vTaskSuspend(xTaskENDhandle);
 
-    // create queue
-    xQueueData = xQueueCreate(1024,sizeof(long)); // 32 bits = 4 bytes
+    // create queue/semaphores/event groups
+    xQueueData        = xQueueCreate(1024,sizeof(long)); // 32 bits = 4 bytes
+    xEvents           = xEventGroupCreate();
+    xSemaphoreBTN_ON  = xSemaphoreCreateBinary();
+    xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
+    xSemaphoreTimer   = xSemaphoreCreateBinary();
+    
+    
     if(xQueueData == NULL){ // tests if queue creation fails
         ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.\n");
         while(1);
     }
+    if(xQueueData == NULL){ // tests if event group creation fails
+        ESP_LOGE(SETUP_APP_TAG, "Failed to create event group.\n");
+        while(1);
+    }
+    if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xSemaphoreTimer == NULL)){ // tests if semaphore creation fails
+        ESP_LOGE(SETUP_APP_TAG, "Failed to create binary semaphores.\n");
+        while(1);
+    }
 
-    // create binary semaphores
-    xSemaphoreBTN_ON = xSemaphoreCreateBinary();
-    xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
-    xSemaphoreTimer = xSemaphoreCreateBinary();
-    
-    if(xSemaphoreBTN_ON == NULL){ // tests if semaphore creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create binary semaphore for ON button.\n");
-        while(1);
-    }
-    if(xSemaphoreBTN_OFF == NULL){ // tests if semaphore creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create binary semaphore for OFF button.\n");
-        while(1);
-    }
-    if(xSemaphoreTimer == NULL){ // tests if semaphore creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create binary semaphore for timer.\n");
-        while(1);
-    }
     
     ESP_LOGI(SETUP_APP_TAG, "Successful BOOT!");
 }
@@ -115,11 +129,14 @@ void vTaskSTART(void * pvParameters)
 
             // configure PWM clock - ultrasonic mode
             //ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_ultra));
-            ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_std));
-            ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+            //ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_std));
+            //ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
             // set flag informing that the recording already started
             flags[REC_STARTED] = 1;
+
+            // start i2s
+            ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
 
@@ -160,10 +177,13 @@ void vTaskEND(void * pvParameters)
             xQueueReset(xQueueData);
 
             // configure PWM clock - low-power mode
-            ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_low));
-            ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+            //ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_low));
+            //ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
             
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
+
+            // i2s stop
+            ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
             // close file in use
             close_file(&session_file);
@@ -191,38 +211,31 @@ void vTaskMEMSmic(void * pvParameters)
     BaseType_t xHighPriorityTaskWoken = pdFALSE;
     while(1)
     {
+        //#include "soc/timer_group_struct.h"
+        //#include "soc/timer_group_reg.h"
+        //TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE;
+        //TIMERG0.wdt_feed=1;
+        //TIMERG0.wdt_wprotect=0;
         if(xSemaphoreTimer!=NULL && xSemaphoreTakeFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken)==pdTRUE) // timer reached counting
         {
-            cntr++;
-            ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic, %d!\n", cntr);
-            xQueueSend(xQueueData,&cntr,0);
+            //inMic.cntr++;
+            inMic.cntr = esp_timer_get_time();
+            inMic.reading = gpio_get_level(MIC_DATA_PIN);
+            ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic!");
+            xQueueSend(xQueueData,&inMic,0);
         } else {vTaskDelay(1);}
     }
-    /*
-    unsigned char aux=0;
-    unsigned char sending = 42;
-
-    for(int itr=0; itr<8; itr++)
-    {
-        gpio_set_level(GPIO_OUTPUT_IO, sending & (0x80>>itr)); // x80 = 1000 0000
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        aux = (aux<<1) | gpio_get_level(GPIO_INPUT_IO); // append 1-bit
-        printf("still running: %d\n", aux);
-    }
-    printf("end running: %d\n", aux); // queue this value
-    */
 }
 
 void vTaskSDcard(void * pvParameters)
 {
-    int data;
     while(1)
     {
-        while(xQueueData!=NULL && xQueueReceive(xQueueData, &data, 0)==pdTRUE)
+        while(xQueueData!=NULL && xQueueReceive(xQueueData, &inSd, 0)==pdTRUE)
         {
-            ESP_LOGI(SD_CARD_TAG, "Hello SD card, %d!", data);
-            fprintf(session_file, "%d\n", data);
-        } //else {vTaskDelay(1);}
+            ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
+            fprintf(session_file, "%d,%d\n", inSd.reading, inSd.cntr);
+        } 
         vTaskDelay(1);
     }
 }

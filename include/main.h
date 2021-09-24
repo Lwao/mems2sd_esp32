@@ -53,6 +53,7 @@
     #include "driver/periph_ctrl.h"
     #include "driver/timer.h"
     #include "driver/ledc.h"
+    #include "driver/i2s.h"
 #endif //DRIVERS_INCLUDED
 
 #ifndef SD_LIB_INCLUDED 
@@ -69,6 +70,7 @@
     #include "freertos/task.h"
     #include "freertos/queue.h"
     #include "freertos/semphr.h"
+    #include "freertos/event_groups.h"
 #endif //FREERTOS_LIB_INCLUDED
 
 #ifndef TIMER_LIB_INCLUDED
@@ -91,10 +93,13 @@
 #define TIMER_COUNT   2500                               // 40MHz/TIMER_COUNT
 
 // pins
-#define MIC_CLOCK_PIN  GPIO_NUM_2  // gpio 2 - MEMS MIC clock in
-#define MIC_DATA_PIN   GPIO_NUM_4  // gpio 4  - MEMS MIC data out
-#define BTN_START_END  GPIO_NUM_0  // gpio 0  - button
-#define GPIO_OUTPUT_IO GPIO_NUM_16 // gpio 16 - no use
+#define MIC_CLOCK_PIN  GPIO_NUM_2   // gpio 2 - MEMS MIC clock in
+#define MIC_DATA_PIN   GPIO_NUM_4   // gpio 4  - MEMS MIC data out
+#define BTN_START_END  GPIO_NUM_0   // gpio 0  - button
+#define GPIO_OUTPUT_IO GPIO_NUM_16  // gpio 16 - no use
+
+// i2s 
+#define I2S_PORT_NUM 0
 
 // pwm clock
 #define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
@@ -173,6 +178,7 @@ timer_config_t timer_conf = {
     .auto_reload = 1,
 }; 
 
+/*
 // microphone low-power mode PWM clock config
 ledc_timer_config_t ledc_timer_low = {
     .speed_mode      = LEDC_HIGH_SPEED_MODE,
@@ -205,6 +211,25 @@ ledc_channel_config_t ledc_channel = {
     .timer_sel  = LEDC_TIMER_0,
     .duty       = 2
 };
+*/
+
+// i2s configuration
+i2s_config_t i2s_config = {
+    .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // Master, RX, PDM
+    .sample_rate = 44100, // 44.1kHz
+    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT, // 16bit
+    .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT, // mono audio configuration
+    .communication_format = I2S_COMM_FORMAT_STAND_I2S, //pcm data format
+    .dma_buf_count = 4,                              // number of buffers, 128 max.
+    .dma_buf_len = 1024,                             // size of each buffer
+    .use_apll = 0,
+    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1 // Interrupt level 1
+};
+
+i2s_pin_config_t i2s_pins = {
+    .ws_io_num = MIC_CLOCK_PIN,
+    .data_in_num = MIC_DATA_PIN,
+};
 
 struct timeval date = {// call struct with date data
     .tv_sec = 0, // current date (to be fecthed from NTP)
@@ -220,21 +245,22 @@ const char* fname = "EX_SD";
 
 // freertos variables
 TaskHandle_t xTaskMEMSmicHandle; // mems microphone [task_handle]
-TaskHandle_t xTaskSDcardHandle; // micro sd card [task_handle]
-TaskHandle_t xTaskSTARThandle; // starting routine [task_handle]
-TaskHandle_t xTaskENDhandle; // ending routine [task_handle]
+TaskHandle_t xTaskSDcardHandle;  // micro sd card [task_handle]
+TaskHandle_t xTaskSTARThandle;   // starting routine [task_handle]
+TaskHandle_t xTaskENDhandle;     // ending routine [task_handle]
 
-QueueHandle_t xQueueData; // data queue for transfering microphone data to sd card [queue_handle]
-SemaphoreHandle_t xSemaphoreBTN_ON; // semaphore to interpret button as start button interrupt [semaphore_handle]
+QueueHandle_t xQueueData;            // data queue for transfering microphone data to sd card [queue_handle]
+EventGroupHandle_t xEvents;          //
+SemaphoreHandle_t xSemaphoreBTN_ON;  // semaphore to interpret button as start button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button interrupt [semaphore_handle]
-SemaphoreHandle_t xSemaphoreTimer; // semaphore to interpret timer got interrupt [semaphore_handle]
+SemaphoreHandle_t xSemaphoreTimer;   // semaphore to interpret timer got interrupt [semaphore_handle]
 
 // flags
 _Bool flags[2] = {0};
 
 // enum containing flags id for flags array
 enum flag_id{SPI_BUS_FREE, // flag indicating if there are devices attached to SPI bus or not
-            REC_STARTED};  // flag informing that the recording session already started
+             REC_STARTED}; // flag informing that the recording session already started
 
 /*
  * Function prototype section
