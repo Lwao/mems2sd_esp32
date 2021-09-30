@@ -40,7 +40,7 @@
 char* merge_filename(const char *filename)
 {
     const char* bar = "/";
-    const char* fileformat = ".txt";
+    const char* fileformat = ".pcm";
     char *name = malloc(strlen(MOUNT_POINT)+strlen(bar)+strlen(filename)+strlen(fileformat));
     strcpy(name, MOUNT_POINT);
     strcat(name, bar); 

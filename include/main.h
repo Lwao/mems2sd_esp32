@@ -100,7 +100,8 @@
 
 // i2s 
 #define I2S_PORT_NUM           0
-#define I2S_DMA_BUFF_LEN_BYTES 1024
+#define I2S_DMA_BUFF_LEN_BYTES 10*1024
+#define I2S_NUM_BUFF           10
 
 // pwm clock
 #define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
@@ -238,8 +239,10 @@ i2s_config_t i2s_config = {
 };
 
 i2s_pin_config_t i2s_pins = {
+    .bck_io_num = I2S_PIN_NO_CHANGE,
     .ws_io_num = MIC_CLOCK_PIN,
-    .data_in_num = MIC_DATA_PIN,
+    .data_out_num = I2S_PIN_NO_CHANGE,
+    .data_in_num = MIC_DATA_PIN
 };
 
 struct timeval date = {// call struct with date data
@@ -248,8 +251,11 @@ struct timeval date = {// call struct with date data
 
 // i2s variables
 size_t bytes_read;
-char *inBuffer;
-char *outBuffer;
+// char *inBuffer;
+// char *outBuffer;
+char inBuffer[I2S_DMA_BUFF_LEN_BYTES];
+char outBuffer[I2S_DMA_BUFF_LEN_BYTES];
+
 
 // sd card variables
 sdmmc_card_t* card;

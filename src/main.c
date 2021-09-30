@@ -14,22 +14,13 @@
  * Main function with general single time configuration in BOOT time
  */
 
-typedef struct
-{
-    int cntr;
-    int reading;
-} data_fmt;
-
-data_fmt inMic =
-{
-    .cntr = 0,
-    .reading = 0,
-};
-data_fmt inSd;
 
 void app_main(void)
 {  
     BaseType_t xReturnedTask[4];
+
+    // inBuffer  = (char*) calloc(I2S_DMA_BUFF_LEN_BYTES, sizeof(char));
+    // outBuffer = (char*) calloc(I2S_DMA_BUFF_LEN_BYTES, sizeof(char));
 
     // configure gpio pins
     //ESP_ERROR_CHECK(gpio_config(&out_conf));                              // initialize output pin configuration - no use
@@ -39,29 +30,47 @@ void app_main(void)
     ESP_ERROR_CHECK(gpio_isr_handler_add(BTN_START_END, ISR_BTN, NULL));  // hook isr handler for specific gpio pin
 
     // configure timer
+    
     ESP_ERROR_CHECK(timer_init(TIMER_GROUP_0, TIMER_0, &timer_conf));                                     // initialize timer
     ESP_ERROR_CHECK(timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0));                                  // start value for counting
     ESP_ERROR_CHECK(timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, TIMER_COUNT));                          // interrupt value to fire isr
     ESP_ERROR_CHECK(timer_enable_intr(TIMER_GROUP_0, TIMER_0));                                           // enable timer interruption
     ESP_ERROR_CHECK(timer_isr_callback_add(TIMER_GROUP_0, TIMER_0, ISR_TIMER, NULL, ESP_INTR_FLAG_IRAM)); // associate ISR callback function to timer
-
+    
     // configure i2s
-    //ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config, 0, NULL));
-    //ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins));
-    //ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
+    ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config, 0, NULL));
+    ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins));
+    ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
     // configure PWM clock - low-power mode
     //ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_low));
     //ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
-    // set flag informing that the recording is stopped
-    //flags[REC_STARTED] = 0;
+    // create queue/semaphores/event groups
+    xQueueData        = xQueueCreate(I2S_NUM_BUFF,I2S_DMA_BUFF_LEN_BYTES*sizeof(char)); // 32 bits = 4 bytes
+    xEvents           = xEventGroupCreate();
+    xSemaphoreBTN_ON  = xSemaphoreCreateBinary();
+    xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
+    xSemaphoreTimer   = xSemaphoreCreateBinary();
+    
+    if(xQueueData == NULL){ // tests if queue creation fails
+        ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.\n");
+        while(1);
+    }
+    if(xEvents == NULL){ // tests if event group creation fails
+        ESP_LOGE(SETUP_APP_TAG, "Failed to create event group.\n");
+        while(1);
+    }
+    if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xSemaphoreTimer == NULL)){ // tests if semaphore creation fails
+        ESP_LOGE(SETUP_APP_TAG, "Failed to create binary semaphores.\n");
+        while(1);
+    }  
 
     // create tasks
-    xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART,   "tSTART", 8192, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle,   APP_CPU_NUM);
-    xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskMEMSmic, "tMIC",   8192, NULL, configMAX_PRIORITIES-3, &xTaskMEMSmicHandle, PRO_CPU_NUM);
-    xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskSDcard,  "tSD",    8192, NULL, configMAX_PRIORITIES-4, &xTaskSDcardHandle,  APP_CPU_NUM);
-    xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskEND,     "tEND",   8192, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,     APP_CPU_NUM);
+    xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART,   "taskSTART", 8192, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle,   PRO_CPU_NUM);
+    xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskMEMSmic, "taskMIC",   8192, NULL, configMAX_PRIORITIES-3, &xTaskMEMSmicHandle, APP_CPU_NUM);
+    xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskSDcard,  "taskSD",    8192, NULL, configMAX_PRIORITIES-4, &xTaskSDcardHandle,  PRO_CPU_NUM);
+    xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskEND,     "taskEND",   8192, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,     PRO_CPU_NUM);
 
     for(int itr=0; itr<4; itr++) // iterate over tasks 
     {
@@ -76,33 +85,9 @@ void app_main(void)
     vTaskSuspend(xTaskSDcardHandle);
     vTaskSuspend(xTaskENDhandle);
 
-    // create queue/semaphores/event groups
-    xQueueData        = xQueueCreate(1024,sizeof(long)); // 32 bits = 4 bytes
-    xEvents           = xEventGroupCreate();
-    xSemaphoreBTN_ON  = xSemaphoreCreateBinary();
-    xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
-    xSemaphoreTimer   = xSemaphoreCreateBinary();
-    
-    
-    if(xQueueData == NULL){ // tests if queue creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.\n");
-        while(1);
-    }
-    if(xQueueData == NULL){ // tests if event group creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create event group.\n");
-        while(1);
-    }
-    if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xSemaphoreTimer == NULL)){ // tests if semaphore creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create binary semaphores.\n");
-        while(1);
-    }
-
-    inBuffer = (char *)calloc(I2S_DMA_BUFF_LEN_BYTES, sizeof(char));
-    outBuffer = (char *)calloc(I2S_DMA_BUFF_LEN_BYTES, sizeof(char));
-
     // set flag informing that the recording is stopped
     xEventGroupClearBits(xEvents, BIT_(REC_STARTED));
-    
+
     ESP_LOGI(SETUP_APP_TAG, "Successful BOOT!");
     vTaskDelete(NULL);
 }
@@ -140,9 +125,10 @@ void vTaskSTART(void * pvParameters)
 
             // set flag informing that the recording already started
             xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
+            xEventGroupSetBits(xEvents, BIT_(ENABLE_MIC_READING));
 
             // start i2s
-            //ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));
+            ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
 
@@ -174,13 +160,13 @@ void vTaskEND(void * pvParameters)
             vTaskSuspend(xTaskMEMSmicHandle);
 
             // stuck in loop while the data queue is not empty
-            while(uxQueueMessagesWaitingFromISR(xQueueData)>0) vTaskDelay(10);
+            //while(uxQueueMessagesWaitingFromISR(xQueueData)>0) vTaskDelay(10);
 
             // suspend tasks for recording mode
             vTaskSuspend(xTaskSDcardHandle);
 
             // resets queue and discard remaining data to avoid sd card task to access it
-            xQueueReset(xQueueData);
+            //xQueueReset(xQueueData);
 
             // configure PWM clock - low-power mode
             //ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_low));
@@ -189,7 +175,7 @@ void vTaskEND(void * pvParameters)
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
             // i2s stop
-            //ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
+            ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
             // close file in use
             close_file(&session_file);
@@ -212,33 +198,25 @@ void vTaskEND(void * pvParameters)
     }
 }
 
+#include "soc/timer_group_struct.h"
+#include "soc/timer_group_reg.h"
+        
+
 void vTaskMEMSmic(void * pvParameters)
 {
     BaseType_t xHighPriorityTaskWoken = pdFALSE;
     while(1)
     {
-        /*
-        xEventGroupWaitBits(xEvents, BIT_(ENABLE_MIC_READING), pdFALSE, pdTRUE, portMAX_DELAY); 
-        i2s_read(I2S_PORT_NUM, (void*) inBuffer, I2S_DMA_BUFF_LEN_BYTES, &bytes_read, portMAX_DELAY); // read bytes from mic with i2s
-        memcpy(outBuffer, inBuffer, I2S_DMA_BUFF_LEN_BYTES); // copy input buffer to output buffer
-        xEventGroupClearBits(xEvents, BIT_(ENABLE_MIC_READING));
-	    xEventGroupSetBits(xEvents, BIT_(ENABLE_SDCARD_WRITING)); // notify sd card task to write data
-        */
-        ///*
-        //#include "soc/timer_group_struct.h"
-        //#include "soc/timer_group_reg.h"
-        //TIMERG0.wdt_wprotect=TIMG_WDT_WKEY_VALUE;
-        //TIMERG0.wdt_feed=1;
-        //TIMERG0.wdt_wprotect=0;
-        if(xSemaphoreTimer!=NULL && xSemaphoreTakeFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken)==pdTRUE) // timer reached counting
+        if(xEventGroupWaitBits(xEvents, BIT_(ENABLE_MIC_READING), pdFALSE, pdTRUE, portMAX_DELAY) & BIT_(ENABLE_MIC_READING))//if(xSemaphoreTimer!=NULL && xSemaphoreTakeFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken)==pdTRUE)
         {
-            //inMic.cntr++;
-            inMic.cntr = esp_timer_get_time();
-            inMic.reading = 42;//gpio_get_level(MIC_DATA_PIN);
+            TIMERG1.wdt_wprotect=TIMG_WDT_WKEY_VALUE; // cancel writing protection
+            TIMERG1.wdt_feed=1; // feeds wdt
+            TIMERG1.wdt_wprotect=0; // restore writing protection
             ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic!");
-            xQueueSend(xQueueData,&inMic,0);
-        } else {vTaskDelay(1);}
-        //*/
+            i2s_read(I2S_PORT_NUM, (void*) inBuffer, I2S_DMA_BUFF_LEN_BYTES, &bytes_read, portMAX_DELAY); // read bytes from mic with i2s
+            //for(int i=0; i<I2S_DMA_BUFF_LEN_BYTES; i++){inBuffer[i]= (char) i;}
+            xQueueSend(xQueueData,&inBuffer,0);
+        } else{vTaskDelay(1);}
     }
 }
 
@@ -246,20 +224,12 @@ void vTaskSDcard(void * pvParameters)
 {
     while(1)
     {
-	    /*
-        xEventGroupWaitBits(xEvents, BIT_(ENABLE_SDCARD_WRITING), pdFALSE, pdTRUE, portMAX_DELAY); // wait for data to be read
-        fwrite(outBuffer, I2S_DMA_BUFF_LEN_BYTES, 1, session_file); // write output buffer to sd card current file
-        xEventGroupClearBits(xEvents, BIT_(ENABLE_SDCARD_WRITING)); // clear event flag to reaccess task
-        xEventGroupSetBits(xEvents, BIT_(ENABLE_MIC_READING));
-        */
-        ///*
-        while(xQueueData!=NULL && xQueueReceive(xQueueData, &inSd, 0)==pdTRUE)
+        while(xQueueData!=NULL && xQueueReceive(xQueueData, &outBuffer, 0)==pdTRUE) // wait for data to be read
         {
             ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
-            fprintf(session_file, "%d,%d\n", inSd.reading, inSd.cntr);
+            fwrite(outBuffer, I2S_DMA_BUFF_LEN_BYTES, 1, session_file); // write output buffer to sd card current file
         }
         vTaskDelay(1);
-        //*/
     }
 }
 

@@ -5,6 +5,8 @@
         "array": "c",
         "string": "c",
         "string_view": "c",
-        "cstdio": "c"
+        "cstdio": "c",
+        "timer_group_struct.h": "c",
+        "timer_group_reg.h": "c"
     }
 }
