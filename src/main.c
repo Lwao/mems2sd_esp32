@@ -198,9 +198,6 @@ void vTaskEND(void * pvParameters)
     }
 }
 
-#include "soc/timer_group_struct.h"
-#include "soc/timer_group_reg.h"
-        
 void vTaskMEMSmic(void * pvParameters)
 {
     while(1)

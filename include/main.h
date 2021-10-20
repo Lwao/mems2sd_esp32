@@ -20,6 +20,8 @@
  *  DRIVERS_INCLUDED:             basic esp drivers and peripherals
  *  SD_LIB_INCLUDED:              enable support to SD card SPI communication
  *  FREERTOS_LIB_INCLUDED:        enable freeRTOS support
+ *  TIMER_LIB_INCLUDED:           enable hardware timers
+ *  SOC_LIB_INCLUDED:             register level access
  */
 
 #include "sd_driver.h"
@@ -78,6 +80,12 @@
     #include "esp_timer.h"
     #include "esp_sleep.h"
 #endif //TIMER_LIB_INCLUDED
+
+#ifndef SOC_LIB_INCLUDED
+    #define SOC_LIB_INCLUDED
+    #include "soc/timer_group_struct.h"
+    #include "soc/timer_group_reg.h"
+#endif //SOC_LIB_INCLUDED
 
 /*
  * Define section
@@ -227,15 +235,15 @@ ledc_channel_config_t ledc_channel = {
 
 // i2s configuration
 i2s_config_t i2s_config = {
-    .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // Master, RX, PDM
-    .sample_rate = 44100, // 44.1kHz
-    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT, // 16bit
-    .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT, // mono audio configuration
-    .communication_format = I2S_COMM_FORMAT_STAND_I2S, //pcm data format
-    .dma_buf_count = 4,                              // number of buffers, 128 max.
-    .dma_buf_len = 1024,                             // size of each buffer
+    .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // master, RX, PDM
+    .sample_rate = 44100,                                 // 44.1kHz
+    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,         // 16bit
+    .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration
+    .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
+    .dma_buf_count = 4,                                   // number of buffers, 128 max.
+    .dma_buf_len = 1024,                                  // size of each buffer, 1024 max.
     .use_apll = 0,
-    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1 // Interrupt level 1
+    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1              // interrupt level 1
 };
 
 i2s_pin_config_t i2s_pins = {
