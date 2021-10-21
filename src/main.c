@@ -47,7 +47,7 @@ void app_main(void)
     //ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
     // create queue/semaphores/event groups
-    xQueueData        = xQueueCreate(I2S_NUM_BUFF,I2S_DMA_BUFF_LEN_BYTES*sizeof(char)); // 32 bits = 4 bytes
+    xQueueData        = xQueueCreate(16,2*DMA_BUF_LEN*sizeof(char)); // 32 bits = 4 bytes
     xEvents           = xEventGroupCreate();
     xSemaphoreBTN_ON  = xSemaphoreCreateBinary();
     xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
@@ -198,6 +198,7 @@ void vTaskEND(void * pvParameters)
     }
 }
 
+/*
 void vTaskMEMSmic(void * pvParameters)
 {
     while(1)
@@ -213,6 +214,23 @@ void vTaskMEMSmic(void * pvParameters)
         } else{vTaskDelay(1);}
     }
 }
+*/
+
+void vTaskMEMSmic(void * pvParameters)
+{
+    while(1)
+    {
+        if(xEventGroupWaitBits(xEvents, BIT_(ENABLE_MIC_READING), pdFALSE, pdTRUE, portMAX_DELAY) & BIT_(ENABLE_MIC_READING))//if(xSemaphoreTimer!=NULL && xSemaphoreTakeFromISR(xSemaphoreTimer,&xHighPriorityTaskWoken)==pdTRUE)
+        {
+            TIMERG1.wdt_wprotect=TIMG_WDT_WKEY_VALUE; // cancel writing protection
+            TIMERG1.wdt_feed=1; // feeds wdt
+            TIMERG1.wdt_wprotect=0; // restore writing protection
+            //ESP_LOGI(MEMS_MIC_TAG, "Hello MEMS mic!");
+            i2s_read(I2S_PORT_NUM, (void*) inBuffer, DMA_BUF_LEN, &bytes_read, portMAX_DELAY); // read bytes from mic with i2s
+            xQueueSend(xQueueData,&inBuffer,0);
+        } else{vTaskDelay(1);}
+    }
+}
 
 void vTaskSDcard(void * pvParameters)
 {
@@ -221,7 +239,7 @@ void vTaskSDcard(void * pvParameters)
         while(xQueueData!=NULL && xQueueReceive(xQueueData, &outBuffer, 0)==pdTRUE) // wait for data to be read
         {
             //ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
-            fwrite(outBuffer, I2S_DMA_BUFF_LEN_BYTES, 1, session_file); // write output buffer to sd card current file
+            fwrite(outBuffer, DMA_BUF_LEN, 1, session_file); // write output buffer to sd card current file
         }
         vTaskDelay(1);
     }

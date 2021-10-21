@@ -108,8 +108,10 @@
 
 // i2s 
 #define I2S_PORT_NUM           0
-#define I2S_DMA_BUFF_LEN_BYTES 10*1024
-#define I2S_NUM_BUFF           10
+#define I2S_DMA_BUFF_LEN_BYTES 128
+#define I2S_NUM_BUFF           1
+#define DMA_BUF_COUNT          64
+#define DMA_BUF_LEN            1024
 
 // pwm clock
 #define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
@@ -198,41 +200,6 @@ timer_config_t timer_conf = {
     .auto_reload = 1,
 }; 
 
-/*
-// microphone low-power mode PWM clock config
-ledc_timer_config_t ledc_timer_low = {
-    .speed_mode      = LEDC_HIGH_SPEED_MODE,
-    .timer_num       = LEDC_TIMER_0,
-    .duty_resolution = 2,
-    .freq_hz         = LOW_POWER_MODE_CLOCK
-};
-
-// microphone ultrasonic mode PWM clock config
-ledc_timer_config_t ledc_timer_ultra = {
-    .speed_mode      = LEDC_HIGH_SPEED_MODE,
-    .timer_num       = LEDC_TIMER_0,
-    .duty_resolution = 2,
-    .freq_hz         = ULTRASONIC_MODE_CLOCK
-};
-
-// microphone standard mode PWM clock config
-ledc_timer_config_t ledc_timer_std = {
-    .speed_mode      = LEDC_HIGH_SPEED_MODE,
-    .timer_num       = LEDC_TIMER_0,
-    .duty_resolution = 2,
-    .freq_hz         = STANDARD_MODE_CLOCK
-};
- 
-// PWM clock channel connected to microphone 
-ledc_channel_config_t ledc_channel = {
-    .channel    = LEDC_CHANNEL_0,
-    .gpio_num   = MIC_CLOCK_PIN,
-    .speed_mode = LEDC_HIGH_SPEED_MODE,
-    .timer_sel  = LEDC_TIMER_0,
-    .duty       = 2
-};
-*/
-
 // i2s configuration
 i2s_config_t i2s_config = {
     .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // master, RX, PDM
@@ -240,15 +207,15 @@ i2s_config_t i2s_config = {
     .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,         // 16bit
     .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
-    .dma_buf_count = 4,                                   // number of buffers, 128 max.
-    .dma_buf_len = 1024,                                  // size of each buffer, 1024 max.
+    .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
+    .dma_buf_len = DMA_BUF_LEN,                           // size of each buffer, 1024 max.
     .use_apll = 0,
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1              // interrupt level 1
 };
 
 i2s_pin_config_t i2s_pins = {
     .bck_io_num = I2S_PIN_NO_CHANGE,
-    .ws_io_num = MIC_CLOCK_PIN,
+    .ws_io_num = MIC_CLOCK_PIN, 
     .data_out_num = I2S_PIN_NO_CHANGE,
     .data_in_num = MIC_DATA_PIN
 };
@@ -261,8 +228,8 @@ struct timeval date = {// call struct with date data
 size_t bytes_read;
 // char *inBuffer;
 // char *outBuffer;
-char inBuffer[I2S_DMA_BUFF_LEN_BYTES];
-char outBuffer[I2S_DMA_BUFF_LEN_BYTES];
+char inBuffer[2*DMA_BUF_LEN];
+char outBuffer[2*DMA_BUF_LEN];
 
 
 // sd card variables

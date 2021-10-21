@@ -40,12 +40,12 @@
 char* merge_filename(const char *filename)
 {
     const char* bar = "/";
-    const char* fileformat = ".pcm";
+    const char* fileformat = "";
     char *name = malloc(strlen(MOUNT_POINT)+strlen(bar)+strlen(filename)+strlen(fileformat));
     strcpy(name, MOUNT_POINT);
     strcat(name, bar); 
     strcat(name, filename);
-    strcat(name, fileformat);
+    //strcat(name, fileformat);
     return name;
 }
 
