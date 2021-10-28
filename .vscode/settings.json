@@ -8,6 +8,7 @@
         "cstdio": "c",
         "timer_group_struct.h": "c",
         "timer_group_reg.h": "c",
-        "queue.h": "c"
+        "queue.h": "c",
+        "cmath": "cpp"
     }
 }
