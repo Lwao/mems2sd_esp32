@@ -93,13 +93,6 @@
  * Definition of macros to be used globally in the code
  */
 
-// TODO: another alternative is to set TIMER_DIVIDER to 1 and the timer need to count up to 20 to fire the isr
-
-// timer
-#define TIMER_DIVIDER 2                                //  hardware timer clock divider (TIMER_DIVIDER  = 20/17 -> TIMER_SCALE = 4/4.8MHz
-#define TIMER_SCALE   (TIMER_BASE_CLK / TIMER_DIVIDER) // convert counter value to seconds (TIMER_BASE_CLK = 80MHz)
-#define TIMER_COUNT   2500                               // 40MHz/TIMER_COUNT
-
 // pins
 #define MIC_CLOCK_PIN  GPIO_NUM_2   // gpio 2 - MEMS MIC clock in
 #define MIC_DATA_PIN   GPIO_NUM_4   // gpio 4  - MEMS MIC data out
@@ -107,11 +100,9 @@
 #define GPIO_OUTPUT_IO GPIO_NUM_16  // gpio 16 - no use
 
 // i2s 
-#define I2S_PORT_NUM           0
-#define I2S_DMA_BUFF_LEN_BYTES 128
-#define I2S_NUM_BUFF           1
-#define DMA_BUF_COUNT          64
-#define DMA_BUF_LEN            1024
+#define I2S_PORT_NUM     0
+#define DMA_BUF_COUNT    64
+#define DMA_BUF_LEN_SMPL 1024
 
 // pwm clock
 #define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
@@ -119,9 +110,9 @@
 #define STANDARD_MODE_CLOCK   2000000     // 1.024MHz - 2.475MHz
 
 // gpio
-#define GPIO_OUTPUT_PIN_SEL     (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
-#define GPIO_INPUT_PIN_SEL1     (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
-#define GPIO_INPUT_PIN_SEL2     (1ULL<<MIC_DATA_PIN)   // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_OUTPUT_PIN_SEL   (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_INPUT_PIN_SEL1   (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
+#define GPIO_INPUT_PIN_SEL2   (1ULL<<MIC_DATA_PIN)   // | (1ULL<<ANOTHER_GPIO)
 #define ESP_INTR_FLAG_DEFAULT 0
 
 // sd card
@@ -157,21 +148,11 @@ enum events{ENABLE_SDCARD_WRITING, // bit indicating that data was read from mic
             REC_STARTED,           // flag informing that the recording session already started
             SPI_BUS_FREE};         // flag indicating if there are devices attached to SPI bus or not
 
-
 /*
  * Global variable declaration section
  * --------------------
  * Initialize global variables to be used in any part of the code
  */
-
-// config output pin - no use yet
-gpio_config_t out_conf = {
-    .intr_type    = GPIO_INTR_DISABLE,   // disable interrupt
-    .mode         = GPIO_MODE_OUTPUT,    // set as input mode
-    .pin_bit_mask = GPIO_OUTPUT_PIN_SEL, // bit mask of pins to set (GPIO16)
-    .pull_down_en = 0,                   // disable pull-down mode
-    .pull_up_en   = 0,                   // disable pull-up mode
-};
 
 // config input pin - button (GPIO0 commanded by BOOT button)
 gpio_config_t in_conf1 = {
@@ -182,54 +163,33 @@ gpio_config_t in_conf1 = {
     .pull_up_en   = 0,                   // disable pull-up mode
 };
 
-// config input pin - PDM output from mic
-gpio_config_t in_conf2 = {
-    .intr_type    = GPIO_INTR_DISABLE,   // disable interrupt
-    .mode         = GPIO_MODE_INPUT,     // set as input mode
-    .pin_bit_mask = GPIO_INPUT_PIN_SEL2, // bit mask of pins to set (GPIO04)
-    .pull_down_en = 1,                   // enable pull-down mode
-    .pull_up_en   = 0,                   // disable pull-up mode
-};
-
-// read from microphone timer config (APB is the fafault clock source)
-timer_config_t timer_conf = {
-    .divider     = TIMER_DIVIDER,
-    .counter_dir = TIMER_COUNT_UP,
-    .counter_en  = TIMER_PAUSE,
-    .alarm_en    = TIMER_ALARM_EN,
-    .auto_reload = 1,
-}; 
-
-// i2s configuration
+// i2s acquisition config
 i2s_config_t i2s_config = {
-    .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // master, RX, PDM
-    .sample_rate = 44100,                                 // 44.1kHz
-    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,         // 16bit
+    .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // master driver | receiving data (RX) | in PDM modulation
+    .sample_rate = 44100,                                 // sample rate
+    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,         // 16bit resolution per sample
     .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
-    .dma_buf_len = DMA_BUF_LEN,                           // size of each buffer, 1024 max.
-    .use_apll = 0,
+    .dma_buf_len = DMA_BUF_LEN_SMPL,                      // size of each buffer, 1024 max.
+    .use_apll = 0,                                        // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1              // interrupt level 1
 };
 
+// i2s pin config
 i2s_pin_config_t i2s_pins = {
     .bck_io_num = I2S_PIN_NO_CHANGE,
-    .ws_io_num = MIC_CLOCK_PIN, 
-    .data_out_num = I2S_PIN_NO_CHANGE,
-    .data_in_num = MIC_DATA_PIN
+    .ws_io_num = MIC_CLOCK_PIN,         // clock pin
+    .data_out_num = I2S_PIN_NO_CHANGE,  
+    .data_in_num = MIC_DATA_PIN         // data in pin
 };
 
-struct timeval date = {// call struct with date data
-    .tv_sec = 0, // current date (to be fecthed from NTP)
+struct timeval date = {// struct with date data
+    .tv_sec = 0, // current date in seconds (to be fecthed from NTP)
 };
 
-// i2s variables
-size_t bytes_read;
-// char *inBuffer;
-// char *outBuffer;
-char inBuffer[2*DMA_BUF_LEN];
-char outBuffer[2*DMA_BUF_LEN];
+size_t bytes_read; // number of bytes read by i2s_read
+char dataBuffer[2*DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
 
 
 // sd card variables
@@ -237,8 +197,8 @@ sdmmc_card_t* card;
 sdmmc_host_t host;
 FILE* session_file = NULL;
 
-const char mount_point[] = MOUNT_POINT;
-const char* fname = "EX_SD";
+const char mount_point[] = MOUNT_POINT; // sd card mounting point
+const char* fname = "EX_SD"; // standard session file name
 
 // freertos variables
 TaskHandle_t xTaskMEMSmicHandle; // mems microphone [task_handle]
@@ -247,7 +207,7 @@ TaskHandle_t xTaskSTARThandle;   // starting routine [task_handle]
 TaskHandle_t xTaskENDhandle;     // ending routine [task_handle]
 
 QueueHandle_t xQueueData;            // data queue for transfering microphone data to sd card [queue_handle]
-EventGroupHandle_t xEvents;          //
+EventGroupHandle_t xEvents;          // event group to handle event flags [event_group_handle]
 SemaphoreHandle_t xSemaphoreBTN_ON;  // semaphore to interpret button as start button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreTimer;   // semaphore to interpret timer got interrupt [semaphore_handle]
@@ -319,10 +279,5 @@ void vTaskEND(void * pvParameters);
  * @brief Interrupt service routine for button pressed (associated with BOOT button a.k.a GPIO0)
  */
 static void IRAM_ATTR ISR_BTN();
-
-/**
- * @brief Interrupt service routine for MEMS microphone timer
- */
-static bool IRAM_ATTR ISR_TIMER();
 
 #endif //_MAIN_H_
