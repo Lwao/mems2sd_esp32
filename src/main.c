@@ -14,10 +14,9 @@
  * Main function with general single time configuration in BOOT time
  */
 
-
 void app_main(void)
 {  
-    BaseType_t xReturnedTask[4];
+    BaseType_t xReturnedTask[3];
 
     // configure gpio pins
     ESP_ERROR_CHECK(gpio_config(&in_conf1));                              // initialize input pin 1 configuration - on/off button
@@ -49,11 +48,10 @@ void app_main(void)
     }  
 
     // create tasks
-    xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART,   "taskSTART", 8192, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle,   PRO_CPU_NUM);
-    xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskEND,     "taskEND",   8192, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,     PRO_CPU_NUM);
-    xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskSDcard,  "taskSD",    8192, NULL, configMAX_PRIORITIES-4, &xTaskSDcardHandle,  PRO_CPU_NUM);
-    //xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskMEMSmic, "taskMIC",   8192, NULL, configMAX_PRIORITIES-3, &xTaskMEMSmicHandle, APP_CPU_NUM);
-
+    xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART, "taskSTART", 8192, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle, PRO_CPU_NUM);
+    xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskEND,   "taskEND",   8192, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,   PRO_CPU_NUM);
+    xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskREC,   "taskREC",   8192, NULL, configMAX_PRIORITIES-3, &xTaskRECHandle,   APP_CPU_NUM);
+   
     for(int itr=0; itr<3; itr++) // iterate over tasks 
     {
         if(xReturnedTask[itr] == pdFAIL){ // tests if task creation fails
@@ -63,8 +61,7 @@ void app_main(void)
     }
 
     // suspend tasks for recording mode
-    //vTaskSuspend(xTaskMEMSmicHandle);
-    vTaskSuspend(xTaskSDcardHandle);
+    vTaskSuspend(xTaskRECHandle);
     vTaskSuspend(xTaskENDhandle);
 
     // set flag informing that the recording is stopped
@@ -101,7 +98,6 @@ void vTaskSTART(void * pvParameters)
 
             // set flag informing that the recording already started
             xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
-            xEventGroupSetBits(xEvents, BIT_(ENABLE_MIC_READING));
 
             // start i2s
             ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));
@@ -109,8 +105,7 @@ void vTaskSTART(void * pvParameters)
             ESP_LOGI(START_REC_TAG, "Recording session started.");
 
             // resume tasks for recording mode
-            //vTaskResume(xTaskMEMSmicHandle);
-            vTaskResume(xTaskSDcardHandle);
+            vTaskResume(xTaskRECHandle);
             vTaskResume(xTaskENDhandle);
         
             // locking task
@@ -127,8 +122,7 @@ void vTaskEND(void * pvParameters)
         if(xSemaphoreBTN_OFF!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn OFF recording
         {
             // suspend tasks for recording mode
-            //vTaskSuspend(xTaskMEMSmicHandle);
-            vTaskSuspend(xTaskSDcardHandle);
+            vTaskSuspend(xTaskRECHandle);
 
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
@@ -156,7 +150,7 @@ void vTaskEND(void * pvParameters)
     }
 }
 
-void vTaskSDcard(void * pvParameters)
+void vTaskREC(void * pvParameters)
 {
     i2s_event_t i2s_evt;
     while(1)

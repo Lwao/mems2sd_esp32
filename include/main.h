@@ -94,7 +94,7 @@
  */
 
 // pins
-#define MIC_CLOCK_PIN  GPIO_NUM_2   // gpio 2 - MEMS MIC clock in
+#define MIC_CLOCK_PIN  GPIO_NUM_21  // gpio 2 - MEMS MIC clock in
 #define MIC_DATA_PIN   GPIO_NUM_4   // gpio 4  - MEMS MIC data out
 #define BTN_START_END  GPIO_NUM_0   // gpio 0  - button
 #define GPIO_OUTPUT_IO GPIO_NUM_16  // gpio 16 - no use
@@ -103,11 +103,6 @@
 #define I2S_PORT_NUM     0
 #define DMA_BUF_COUNT    64
 #define DMA_BUF_LEN_SMPL 1024
-
-// pwm clock
-#define LOW_POWER_MODE_CLOCK  500000      // 351kHz - 815kHz
-#define ULTRASONIC_MODE_CLOCK 4000000     // 3.072MHz - 4.8MHz
-#define STANDARD_MODE_CLOCK   2000000     // 1.024MHz - 2.475MHz
 
 // gpio
 #define GPIO_OUTPUT_PIN_SEL   (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
@@ -125,7 +120,7 @@
     #define PIN_NUM_MISO 19 // SDI - Serial Data In
     #define PIN_NUM_MOSI 23 // SDO - Serial Data Out
     #define PIN_NUM_CLK  18 // System clock
-    #define PIN_NUM_CS   5  // Chip select
+    #define PIN_NUM_CS   22 // Chip select
 #endif
 
 // log flags
@@ -143,10 +138,8 @@
 
 #define BIT_(shift) (1<<shift)
 
-enum events{ENABLE_SDCARD_WRITING, // bit indicating that data was read from mic and it is ready to save onto sd card
-            ENABLE_MIC_READING,
-            REC_STARTED,           // flag informing that the recording session already started
-            SPI_BUS_FREE};         // flag indicating if there are devices attached to SPI bus or not
+enum events{REC_STARTED,   // flag informing that the recording session already started
+            SPI_BUS_FREE}; // flag indicating if there are devices attached to SPI bus or not
 
 /*
  * Global variable declaration section
@@ -201,10 +194,9 @@ const char mount_point[] = MOUNT_POINT; // sd card mounting point
 const char* fname = "EX_SD"; // standard session file name
 
 // freertos variables
-TaskHandle_t xTaskMEMSmicHandle; // mems microphone [task_handle]
-TaskHandle_t xTaskSDcardHandle;  // micro sd card [task_handle]
-TaskHandle_t xTaskSTARThandle;   // starting routine [task_handle]
-TaskHandle_t xTaskENDhandle;     // ending routine [task_handle]
+TaskHandle_t xTaskRECHandle;   // get data from mic and save into sd card [task_handle]
+TaskHandle_t xTaskSTARThandle; // starting routine [task_handle]
+TaskHandle_t xTaskENDhandle;   // ending routine [task_handle]
 
 QueueHandle_t xQueueData;            // data queue for transfering microphone data to sd card [queue_handle]
 EventGroupHandle_t xEvents;          // event group to handle event flags [event_group_handle]
@@ -248,18 +240,11 @@ void initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card);
 void deinitialize_sd_card(sdmmc_card_t** card);
 
 /**
- * @brief Task to capture data from MEMS microphone
+ * @brief Task to acquire and save audio data into SD card
  *
  * @param pvParameters freeRTOS task parameters
  */
-void vTaskMEMSmic(void * pvParameters);
-
-/**
- * @brief Task to save acquired data in SD card
- *
- * @param pvParameters freeRTOS task parameters
- */
-void vTaskSDcard(void * pvParameters);
+void vTaskREC(void * pvParameters);
 
 /**
  * @brief Task to configure START of recording when receives command to it
