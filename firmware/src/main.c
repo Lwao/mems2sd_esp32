@@ -88,13 +88,15 @@ void vTaskSTART(void * pvParameters)
 
             // initialize SPI bus and mount SD card
             initialize_spi_bus(&host);
+            vTaskDelay(100);
             initialize_sd_card(&host, &card);
+            vTaskDelay(100);
             
             // reset RTC 
             settimeofday(&date, NULL); // update time
             
             // open new file in append mode
-            while(session_file==NULL){session_file = open_file(fname, "a");}
+            while(session_file==NULL) session_file = open_file(fname, "a");
 
             // set flag informing that the recording already started
             xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
@@ -162,11 +164,13 @@ void vTaskREC(void * pvParameters)
         ) // wait for data to be read
         {
             //ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
-            i2s_read(I2S_PORT_NUM, (void*) dataBuffer, 2*DMA_BUF_LEN_SMPL, &bytes_read, portMAX_DELAY); // read bytes from DMA
+            //i2s_read(I2S_PORT_NUM, (void*) dataBuffer, 2*DMA_BUF_LEN_SMPL, &bytes_read, portMAX_DELAY); // read bytes from DMA
+            i2s_read(I2S_PORT_NUM, (void*) dataBuffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
             fwrite(dataBuffer, bytes_read, 1, session_file); // write buffer to sd card current file
 			fsync(fileno(session_file));
         }
         vTaskDelay(1);
+        // if (evt.type == I2S_EVENT_RX_Q_OVF) printf("RX data dropped\n");
     }
 }
 
@@ -195,7 +199,7 @@ void initialize_spi_bus(sdmmc_host_t* host)
     ESP_LOGI(INIT_SPI_TAG, "Initializing SPI bus!");
 
     sdmmc_host_t host_temp = SDSPI_HOST_DEFAULT();
-    //host_temp.max_freq_khz = SDMMC_FREQ_PROBING;//100;
+    // host_temp.max_freq_khz = SDMMC_FREQ_PROBING;//100;
     //host_temp.command_timeout_ms = 100;
 
     spi_bus_config_t bus_cfg = {

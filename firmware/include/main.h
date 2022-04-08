@@ -104,6 +104,27 @@
 #define DMA_BUF_COUNT    64
 #define DMA_BUF_LEN_SMPL 1024
 
+/* Sample rate
+0  -> 16kHz   = 16000; 
+1  -> 32kHz   = 32000;
+2  -> 44.1kHz = 44100; 
+3  -> 96kHz   = 96000;
+4  -> 112kHz  = 112000;
+5  -> 128kHz  = 128000;
+6  -> 144kHz  = 144000;
+7  -> 160kHz  = 160000;
+8  -> 176kHz  = 176000;
+9  -> 192kHz  = 192000;
+10 -> 250kHz  = 250000;
+*/
+#define SAMPLE_RATE 44100
+/* Bit depth
+0 -> 8-bits  = I2S_BITS_PER_SAMPLE_8BIT ;
+1 -> 16-bits = I2S_BITS_PER_SAMPLE_16BIT;
+*/
+#define BIT_DEPTH I2S_BITS_PER_SAMPLE_16BIT
+#define DATA_BUFFER_SIZE DMA_BUF_LEN_SMPL*BIT_DEPTH/8
+
 // gpio
 #define GPIO_OUTPUT_PIN_SEL   (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
 #define GPIO_INPUT_PIN_SEL1   (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
@@ -113,6 +134,8 @@
 // sd card
 #define MOUNT_POINT "/sdcard" // SD card mounting directory
 #define SPI_DMA_CHAN 1        // DMA channel to be used by the SPI peripheral
+
+// #define CONFIG_FREERTOS_HZ 100
 
 // spi bus
 #ifndef USE_SPI_MODE
@@ -158,9 +181,9 @@ gpio_config_t in_conf1 = {
 
 // i2s acquisition config
 i2s_config_t i2s_config = {
-    .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // master driver | receiving data (RX) | in PDM modulation
-    .sample_rate = 44100,                                 // sample rate
-    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,         // 16bit resolution per sample
+    .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // master driver | receiving data (RX) | in PDM modulation  
+    .sample_rate = SAMPLE_RATE,                           // sample rate
+    .bits_per_sample = BIT_DEPTH,                         // 16bit resolution per sample
     .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
@@ -182,8 +205,8 @@ struct timeval date = {// struct with date data
 };
 
 size_t bytes_read; // number of bytes read by i2s_read
-char dataBuffer[2*DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
-
+// char dataBuffer[2*DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
+char dataBuffer[DATA_BUFFER_SIZE]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
 
 // sd card variables
 sdmmc_card_t* card;
@@ -191,7 +214,7 @@ sdmmc_host_t host;
 FILE* session_file = NULL;
 
 const char mount_point[] = MOUNT_POINT; // sd card mounting point
-const char* fname = "EX_SD"; // standard session file name
+const char* fname = "/rec"; // standard session file name
 
 // freertos variables
 TaskHandle_t xTaskRECHandle;   // get data from mic and save into sd card [task_handle]
