@@ -94,7 +94,7 @@
  */
 
 // pins
-#define MIC_CLOCK_PIN  GPIO_NUM_21  // gpio 2 - MEMS MIC clock in
+#define MIC_CLOCK_PIN  GPIO_NUM_21  // gpio 21 - MEMS MIC clock in
 #define MIC_DATA_PIN   GPIO_NUM_4   // gpio 4  - MEMS MIC data out
 #define BTN_START_END  GPIO_NUM_0   // gpio 0  - button
 #define GPIO_OUTPUT_IO GPIO_NUM_16  // gpio 16 - no use
@@ -205,8 +205,8 @@ struct timeval date = {// struct with date data
 };
 
 size_t bytes_read; // number of bytes read by i2s_read
-// char dataBuffer[2*DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
-char dataBuffer[DATA_BUFFER_SIZE]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
+char dataBuffer[2*DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
+// char dataBuffer[DATA_BUFFER_SIZE]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
 
 // sd card variables
 sdmmc_card_t* card;
@@ -214,7 +214,7 @@ sdmmc_host_t host;
 FILE* session_file = NULL;
 
 const char mount_point[] = MOUNT_POINT; // sd card mounting point
-const char* fname = "/rec"; // standard session file name
+const char* fname = "rec"; // standard session file name
 
 // freertos variables
 TaskHandle_t xTaskRECHandle;   // get data from mic and save into sd card [task_handle]
@@ -237,13 +237,16 @@ SemaphoreHandle_t xSemaphoreTimer;   // semaphore to interpret timer got interru
  * @brief Initialize SPI bus
  * 
  * @param host pointer to SPI bus host
+ * 
+ * @return Error code
  */
-void initialize_spi_bus(sdmmc_host_t* host);
+int initialize_spi_bus(sdmmc_host_t* host);
 
 /**
  * @brief Deinitialize SPI bus
  * 
  * @param host pointer to SPI bus host
+ * 
  */
 void deinitialize_spi_bus(sdmmc_host_t* host);
 
@@ -252,8 +255,10 @@ void deinitialize_spi_bus(sdmmc_host_t* host);
  * 
  * @param host pointer to SPI bus host
  * @param card pointer to SD card host
+ * 
+ * @return Error code
  */
-void initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card);
+int initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card);
 
 /**
  * @brief Unmount SD card filesystem

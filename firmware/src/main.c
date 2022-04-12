@@ -87,9 +87,8 @@ void vTaskSTART(void * pvParameters)
             ESP_LOGI(START_REC_TAG, "Starting record session.");
 
             // initialize SPI bus and mount SD card
-            initialize_spi_bus(&host);
-            vTaskDelay(100);
-            initialize_sd_card(&host, &card);
+            while(initialize_spi_bus(&host)!=1){vTaskDelay(100);}
+            while(initialize_sd_card(&host, &card)!=1){vTaskDelay(100);}
             vTaskDelay(100);
             
             // reset RTC 
@@ -164,8 +163,8 @@ void vTaskREC(void * pvParameters)
         ) // wait for data to be read
         {
             //ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
-            //i2s_read(I2S_PORT_NUM, (void*) dataBuffer, 2*DMA_BUF_LEN_SMPL, &bytes_read, portMAX_DELAY); // read bytes from DMA
-            i2s_read(I2S_PORT_NUM, (void*) dataBuffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
+            i2s_read(I2S_PORT_NUM, (void*) dataBuffer, 2*DMA_BUF_LEN_SMPL, &bytes_read, portMAX_DELAY); // read bytes from DMA
+            // i2s_read(I2S_PORT_NUM, (void*) dataBuffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
             fwrite(dataBuffer, bytes_read, 1, session_file); // write buffer to sd card current file
 			fsync(fileno(session_file));
         }
@@ -194,7 +193,7 @@ static void IRAM_ATTR ISR_BTN()
  * Declaration of functions responsible to (de)initializa peripherals such as SPI bus or SD card host
  */
 
-void initialize_spi_bus(sdmmc_host_t* host)
+int initialize_spi_bus(sdmmc_host_t* host)
 {
     ESP_LOGI(INIT_SPI_TAG, "Initializing SPI bus!");
 
@@ -216,8 +215,10 @@ void initialize_spi_bus(sdmmc_host_t* host)
 
     if (ret != ESP_OK) {
         ESP_LOGE(INIT_SPI_TAG, "Failed to initialize SPI bus.");
-        return;
+        return 0;
     }
+
+    return 1; // initialization complete
 }
 
 void deinitialize_spi_bus(sdmmc_host_t* host)
@@ -230,7 +231,7 @@ void deinitialize_spi_bus(sdmmc_host_t* host)
     } else {ESP_LOGI(DEINIT_SPI_TAG, "SPI not freed.");}
 }
 
-void initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card)
+int initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card)
 {
     ESP_LOGI(INIT_SD_TAG, "Initializing SD card!");
 
@@ -257,12 +258,14 @@ void initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card)
             ESP_LOGE(INIT_SD_TAG, "Failed to initialize the card (%s). "
                 "Make sure SD card lines have pull-up resistors in place.", esp_err_to_name(ret));
         }
-        return;
+        return 0;
     }
 
     // card has been initialized, print its properties
     sdmmc_card_print_info(stdout, *card);
     xEventGroupClearBits(xEvents, BIT_(SPI_BUS_FREE)); // spi bus busy
+
+    return 1; // initialization complete
 }
 
 void deinitialize_sd_card(sdmmc_card_t** card)
