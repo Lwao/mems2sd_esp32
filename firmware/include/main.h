@@ -222,7 +222,6 @@ struct timeval date = {// struct with date data
 };
 
 size_t bytes_read; // number of bytes read by i2s_read
-// char dataBuffer[2*DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
 char dataBuffer[DATA_BUFFER_SIZE]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
 
 // sd card variables
