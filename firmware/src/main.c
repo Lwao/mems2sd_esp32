@@ -16,6 +16,29 @@
 
 void app_main(void)
 {  
+    // wav file header initialization
+    memcpy(wav_header.riff, "RIFX", 4);
+    memcpy(wav_header.wave, "WAVE", 4);
+    memcpy(wav_header.fmt,  "fmt ", 4);
+    memcpy(wav_header.data, "data", 4);
+  
+    // size of FMT chunk in bytes
+    wav_header.chunk_size = 16;
+    wav_header.format_tag = 1;               // PCM
+    wav_header.num_chans = 1;                // mono
+    wav_header.srate = SAMPLE_RATE;          // sample rate
+    wav_header.bytes_per_sec = SAMPLE_RATE*BIT_DEPTH/8; // byte rate 
+    wav_header.bytes_per_samp = BIT_DEPTH/8; // 2-bytes
+    wav_header.bits_per_samp = BIT_DEPTH;    // 16-bits
+
+    swap_byte_order_long(&wav_header.chunk_size);
+    swap_byte_order_short(&wav_header.format_tag);
+    swap_byte_order_short(&wav_header.num_chans);
+    swap_byte_order_long(&wav_header.srate);
+    swap_byte_order_long(&wav_header.bytes_per_sec);
+    swap_byte_order_short(&wav_header.bytes_per_samp);
+    swap_byte_order_short(&wav_header.bits_per_samp);
+
     BaseType_t xReturnedTask[3];
 
     // configure gpio pins
@@ -24,7 +47,7 @@ void app_main(void)
     ESP_ERROR_CHECK(gpio_isr_handler_add(BTN_START_END, ISR_BTN, NULL));  // hook isr handler for specific gpio pin
 
     // configure i2s
-    ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config, 10, &xQueueData));
+    ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config, 32, &xQueueData));
     ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins));
     ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
@@ -97,6 +120,11 @@ void vTaskSTART(void * pvParameters)
             // open new file in append mode
             while(session_file==NULL) session_file = open_file(fname, "a");
 
+            // write .wav file header to session file
+            fseek(session_file, 0L, SEEK_SET); // seek back to beginning of file
+            fwrite(&wav_header, sizeof(struct wav_header_struct), 1, session_file); //write wav file header
+			fsync(fileno(session_file)); // secure data writing
+
             // set flag informing that the recording already started
             xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
 
@@ -118,6 +146,7 @@ void vTaskSTART(void * pvParameters)
 void vTaskEND(void * pvParameters)
 {
     BaseType_t xHighPriorityTaskWoken = pdFALSE;
+    char text[128];
     while(1)
     {
         if(xSemaphoreBTN_OFF!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn OFF recording
@@ -129,6 +158,33 @@ void vTaskEND(void * pvParameters)
 
             // i2s stop
             ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
+
+            // finish .wav file format structure
+            fseek(session_file, 0L, SEEK_END);                                      // seek to end of session file
+            wav_header.flength = ftell(session_file)-8;                             // get file size
+            wav_header.dlength = wav_header.flength-36;                             // get data size (file size minus wav file header size)
+            swap_byte_order_long(&wav_header.flength);                              // swap byte order to invert endianness
+            swap_byte_order_long(&wav_header.dlength);                              // swap byte order to invert endianness
+            close_file(&session_file);                                              // close file that was open in append mode
+            
+            while(session_file==NULL) session_file = open_file(fname, "r+");        // re-open file in read-write mode
+            fgets(text, 127, session_file);                                         // get initial sample text from file header
+
+            fseek(session_file, 4, SEEK_SET);                                     // offset file pointer to end of "RIFX"            
+            fputc((wav_header.flength >> 24) & 255, session_file);                  // distribute bytes o file length to specific position
+            fputc((wav_header.flength >> 16) & 255, session_file);                  // distribute bytes o file length to specific position
+            fputc((wav_header.flength >> 8) & 255, session_file);                   // distribute bytes o file length to specific position
+            fputc((wav_header.flength >> 0) & 255, session_file);                   // distribute bytes o file length to specific position
+            
+            fseek(session_file, 40, SEEK_SET);                                     // offset file pointer to end of "data"            
+            fputc((wav_header.dlength >> 24) & 255, session_file);                  // distribute bytes o data length to specific position
+            fputc((wav_header.dlength >> 16) & 255, session_file);                  // distribute bytes o data length to specific position
+            fputc((wav_header.dlength >> 8) & 255, session_file);                   // distribute bytes o data length to specific position
+            fputc((wav_header.dlength >> 0) & 255, session_file);                   // distribute bytes o data length to specific position
+            
+            // fseek(session_file, 0L, SEEK_SET);                                      // seek back to beginning of file (or rewind(session_file))            
+            // fwrite(&wav_header, sizeof(struct wav_header_struct), 1, session_file); // re-write wav file header with file length and data length information
+		    // fsync(fileno(session_file));                                            // secure data writing
 
             // close file in use
             close_file(&session_file);
@@ -162,9 +218,9 @@ void vTaskREC(void * pvParameters)
             (i2s_evt.type == I2S_EVENT_RX_DONE)
         ) // wait for data to be read
         {
-            //ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
-            i2s_read(I2S_PORT_NUM, (void*) dataBuffer, 2*DMA_BUF_LEN_SMPL, &bytes_read, portMAX_DELAY); // read bytes from DMA
-            // i2s_read(I2S_PORT_NUM, (void*) dataBuffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
+            // ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
+            // i2s_read(I2S_PORT_NUM, (void*) dataBuffer, 2*DMA_BUF_LEN_SMPL, &bytes_read, portMAX_DELAY); // read bytes from DMA
+            i2s_read(I2S_PORT_NUM, (void*) dataBuffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
             fwrite(dataBuffer, bytes_read, 1, session_file); // write buffer to sd card current file
 			fsync(fileno(session_file));
         }
@@ -276,4 +332,16 @@ void deinitialize_sd_card(sdmmc_card_t** card)
     ESP_LOGI(DEINIT_SD_TAG, "Card unmounted.");
 }
 
+void swap_byte_order_short(short* s)
+{
+    (*s) = ((*s) >> 8) |
+           ((*s) << 8);
+}
 
+void swap_byte_order_long(long* l)
+{
+    (*l) = ((*l) >> 24) |
+           (((*l)<<8) & 0x00FF0000) |
+           (((*l)>>8) & 0x0000FF00) |
+           ((*l) << 24);
+}

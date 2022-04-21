@@ -85,6 +85,8 @@
     #define SOC_LIB_INCLUDED
     #include "soc/timer_group_struct.h"
     #include "soc/timer_group_reg.h"
+    #include "soc/syscon_reg.h"
+    #include "soc/syscon_struct.h"
 #endif //SOC_LIB_INCLUDED
 
 /*
@@ -92,17 +94,6 @@
  * --------------------
  * Definition of macros to be used globally in the code
  */
-
-// pins
-#define MIC_CLOCK_PIN  GPIO_NUM_21  // gpio 21 - MEMS MIC clock in
-#define MIC_DATA_PIN   GPIO_NUM_4   // gpio 4  - MEMS MIC data out
-#define BTN_START_END  GPIO_NUM_0   // gpio 0  - button
-#define GPIO_OUTPUT_IO GPIO_NUM_16  // gpio 16 - no use
-
-// i2s 
-#define I2S_PORT_NUM     0
-#define DMA_BUF_COUNT    64
-#define DMA_BUF_LEN_SMPL 1024
 
 /* Sample rate
 0  -> 16kHz   = 16000; 
@@ -126,9 +117,7 @@
 #define DATA_BUFFER_SIZE DMA_BUF_LEN_SMPL*BIT_DEPTH/8
 
 // gpio
-#define GPIO_OUTPUT_PIN_SEL   (1ULL<<GPIO_OUTPUT_IO) // | (1ULL<<ANOTHER_GPIO)
 #define GPIO_INPUT_PIN_SEL1   (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
-#define GPIO_INPUT_PIN_SEL2   (1ULL<<MIC_DATA_PIN)   // | (1ULL<<ANOTHER_GPIO)
 #define ESP_INTR_FLAG_DEFAULT 0
 
 // sd card
@@ -145,6 +134,17 @@
     #define PIN_NUM_CLK  18 // System clock
     #define PIN_NUM_CS   22 // Chip select
 #endif
+
+// pins
+#define MIC_CLOCK_PIN  GPIO_NUM_21  // gpio 21 - MEMS MIC clock in
+#define MIC_DATA_PIN   GPIO_NUM_4   // gpio 4  - MEMS MIC data out
+#define BTN_START_END  GPIO_NUM_0   // gpio 0  - button
+#define GPIO_OUTPUT_IO GPIO_NUM_16  // gpio 16 - no use
+
+// i2s 
+#define I2S_PORT_NUM     0
+#define DMA_BUF_COUNT    64
+#define DMA_BUF_LEN_SMPL 1024
 
 // log flags
 #define INIT_SPI_TAG   "init_spi"
@@ -200,13 +200,30 @@ i2s_pin_config_t i2s_pins = {
     .data_in_num = MIC_DATA_PIN         // data in pin
 };
 
+// wav file header https://forum.arduino.cc/t/creating-a-wav-file-header/314260/4
+struct wav_header_struct {
+    char  riff[4];        /* "RIFF" little endian and "RIFX" big endian */
+    long  flength;        /* file length in bytes                       */
+    char  wave[4];        /* "WAVE"                                     */
+    char  fmt[4];         /* "fmt "                                     */
+    long  chunk_size;     /* size of FMT chunk in bytes (usually 16)    */
+    short format_tag;     /* 1=PCM, 257=Mu-Law, 258=A-Law, 259=ADPCM    */
+    short num_chans;      /* 1=mono, 2=stereo                           */
+    long  srate;          /* Sampling rate in samples per second        */
+    long  bytes_per_sec;  /* bytes per second = srate*bytes_per_samp    */
+    short bytes_per_samp; /* 2=16-bit mono, 4=16-bit stereo             */
+    short bits_per_samp;  /* Number of bits per sample                  */
+    char  data[4];        /* "data"                                     */
+    long  dlength;        /* data length in bytes (filelength - 44)     */
+} wav_header;
+
 struct timeval date = {// struct with date data
     .tv_sec = 0, // current date in seconds (to be fecthed from NTP)
 };
 
 size_t bytes_read; // number of bytes read by i2s_read
-char dataBuffer[2*DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
-// char dataBuffer[DATA_BUFFER_SIZE]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
+// char dataBuffer[2*DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
+char dataBuffer[DATA_BUFFER_SIZE]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
 
 // sd card variables
 sdmmc_card_t* card;
@@ -214,7 +231,7 @@ sdmmc_host_t host;
 FILE* session_file = NULL;
 
 const char mount_point[] = MOUNT_POINT; // sd card mounting point
-const char* fname = "rec"; // standard session file name
+const char* fname = "rec.wav"; // standard session file name
 
 // freertos variables
 TaskHandle_t xTaskRECHandle;   // get data from mic and save into sd card [task_handle]
@@ -292,5 +309,19 @@ void vTaskEND(void * pvParameters);
  * @brief Interrupt service routine for button pressed (associated with BOOT button a.k.a GPIO0)
  */
 static void IRAM_ATTR ISR_BTN();
+
+/**
+ * @brief Byte swap to compensate reversed endianness of ESP32 I2S peripheral (short).
+ * 
+ * @param s short integer to revert
+ */
+void swap_byte_order_short(short* s);
+
+/**
+ * @brief Byte swap to compensate reversed endianness of ESP32 I2S peripheral (long).
+ * 
+ * @param l long integer to revert
+ */
+void swap_byte_order_long(long* l);
 
 #endif //_MAIN_H_
