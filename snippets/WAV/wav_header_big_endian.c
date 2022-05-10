@@ -1,5 +1,5 @@
 /**
- * @file wav_header_big_endian.h
+ * @file wav_header_big_endian.c
  * @brief Implementation of wav file header in big-endian architecture, 
  *    	  considering that the ESP32 has a little-endian architecture but 
  *        its I2S peripheral stores that in big-endian.
