@@ -146,6 +146,9 @@
 #define DMA_BUF_COUNT    64
 #define DMA_BUF_LEN_SMPL 1024
 
+// freetros
+#define configTICK_RATE_HZ 1000
+
 // log flags
 #define INIT_SPI_TAG   "init_spi"
 #define DEINIT_SPI_TAG "deinit_spi"
@@ -182,13 +185,13 @@ gpio_config_t in_conf1 = {
 // i2s acquisition config
 i2s_config_t i2s_config = {
     .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // master driver | receiving data (RX) | in PDM modulation  
-    .sample_rate = SAMPLE_RATE,                           // sample rate
+    .sample_rate = 8000,                                  // sample rate (low power mode)
     .bits_per_sample = BIT_DEPTH,                         // 16bit resolution per sample
     .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
     .dma_buf_len = DMA_BUF_LEN_SMPL,                      // size of each buffer, 1024 max.
-    .use_apll = 0,                                        // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
+    .use_apll = 1,                                        // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1              // interrupt level 1
 };
 
@@ -239,6 +242,7 @@ TaskHandle_t xTaskENDhandle;   // ending routine [task_handle]
 
 QueueHandle_t xQueueData;            // data queue for transfering microphone data to sd card [queue_handle]
 EventGroupHandle_t xEvents;          // event group to handle event flags [event_group_handle]
+SemaphoreHandle_t xMutex;            // mutex to allow end of recording only when the spi interface finishes to write into sd card [sempaphore_handle]
 SemaphoreHandle_t xSemaphoreBTN_ON;  // semaphore to interpret button as start button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreTimer;   // semaphore to interpret timer got interrupt [semaphore_handle]

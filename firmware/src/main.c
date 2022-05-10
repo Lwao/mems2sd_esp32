@@ -53,9 +53,9 @@ void app_main(void)
 
     // create semaphores/event groups
     xEvents           = xEventGroupCreate();
+    xMutex            = xSemaphoreCreateMutex();
     xSemaphoreBTN_ON  = xSemaphoreCreateBinary();
     xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
-    xSemaphoreTimer   = xSemaphoreCreateBinary();
     
     if(xQueueData == NULL){ // tests if queue creation fails
         ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.\n");
@@ -65,8 +65,8 @@ void app_main(void)
         ESP_LOGE(SETUP_APP_TAG, "Failed to create event group.\n");
         while(1);
     }
-    if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xSemaphoreTimer == NULL)){ // tests if semaphore creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create binary semaphores.\n");
+    if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xMutex == NULL)){ // tests if semaphore creation fails
+        ESP_LOGE(SETUP_APP_TAG, "Failed to create semaphores.\n");
         while(1);
     }  
 
@@ -129,7 +129,9 @@ void vTaskSTART(void * pvParameters)
             xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
 
             // start i2s
-            ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));
+            ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));        // start i2s clocking mic to low-power mode
+            vTaskDelay(100);                                 // structural delay to changes take place
+            i2s_set_sample_rates(I2S_PORT_NUM, SAMPLE_RATE); // change mic to ultrasonic mode
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
 
@@ -154,10 +156,13 @@ void vTaskEND(void * pvParameters)
             // suspend tasks for recording mode
             vTaskSuspend(xTaskRECHandle);
 
-            ESP_LOGI(END_REC_TAG, "Recording session finished.");
-
             // i2s stop
             ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
+
+            // wait to get mutex indicating total end of rec task
+            while(xSemaphoreTake(xMutex,portMAX_DELAY)==pdFALSE);
+
+            ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
             // finish .wav file format structure
             fseek(session_file, 0L, SEEK_END);                               // seek to end of session file
@@ -197,6 +202,8 @@ void vTaskEND(void * pvParameters)
 
             ESP_LOGI(END_REC_TAG, "Returning to IDLE mode.");
 
+            xSemaphoreGive(xMutex);
+
             // locking task
             vTaskSuspend(xTaskENDhandle); // suspend actual task
         } else {vTaskDelay(1);}
@@ -211,13 +218,16 @@ void vTaskREC(void * pvParameters)
         while(
             (xQueueData!=NULL)                               &&
             (xQueueReceive(xQueueData, &i2s_evt, 0)==pdTRUE) &&
-            (i2s_evt.type == I2S_EVENT_RX_DONE)
+            (i2s_evt.type == I2S_EVENT_RX_DONE)              &&
+            (xMutex!=NULL)                                   &&
+            (xSemaphoreTake(xMutex,portMAX_DELAY)==pdTRUE)
         ) // wait for data to be read
         {
             // ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
             i2s_read(I2S_PORT_NUM, (void*) dataBuffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
             fwrite(dataBuffer, bytes_read, 1, session_file); // write buffer to sd card current file
 			fsync(fileno(session_file));
+            xSemaphoreGive(xMutex);
         }
         vTaskDelay(1);
         // if (evt.type == I2S_EVENT_RX_Q_OVF) printf("RX data dropped\n");
