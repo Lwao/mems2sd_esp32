@@ -103,7 +103,7 @@ float fixed_duty_cycle[3] = {90, 25, 5};
 void vTaskUpdateColor(void * pvParameters);
 
 /**
- * @brief Callback do software timer
+ * @brief Software timer callback
  */
 void vTimerCbck(TimerHandle_t xTimer);
 
