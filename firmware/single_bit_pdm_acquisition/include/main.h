@@ -109,7 +109,7 @@
 10 -> 250kHz  = 250000;
 */
 #define SAMPLE_RATE_PDM2PCM 44100
-#define SAMPLE_RATE_PDM 140000
+#define SAMPLE_RATE_PDM 62500 // 140000->4.8MHz, 62500->2MHz
 #define SAMPLE_RATE SAMPLE_RATE_PDM
 /* Bit depth
 0 -> 8-bits  = I2S_BITS_PER_SAMPLE_8BIT ;
@@ -210,7 +210,7 @@ i2s_config_t i2s_config_i2s = {
     .mode = I2S_MODE_MASTER | I2S_MODE_RX,                // master driver | receiving data (RX)   
     .sample_rate = 16000,                                 // sample rate (low power mode) clock=2*16*smpl_rate
     .bits_per_sample = BIT_DEPTH,                         // 16bit resolution per sample
-    .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration
+    .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration (LL Layer defaults right-channel-second(LSB))
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
     .dma_buf_len = DMA_BUF_LEN_SMPL,                      // size of each buffer, 1024 max.

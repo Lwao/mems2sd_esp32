@@ -16,21 +16,21 @@
 
 void app_main(void)
 {  
-    // // wav file header initialization
-    // memcpy(wav_header.riff, "RIFX", 4);
-    // memcpy(wav_header.wave, "WAVE", 4);
-    // memcpy(wav_header.fmt,  "fmt ", 4);
-    // memcpy(wav_header.data, "data", 4);
+    // wav file header initialization
+    memcpy(wav_header.riff, "RIFX", 4);
+    memcpy(wav_header.wave, "WAVE", 4);
+    memcpy(wav_header.fmt,  "fmt ", 4);
+    memcpy(wav_header.data, "data", 4);
   
-    // wav_header.chunk_size = 16;                         // size of
-    // wav_header.format_tag = 1;                          // PCM
-    // wav_header.num_chans = 1;                           // mono
-    // wav_header.srate = SAMPLE_RATE;                     // sample rate
-    // wav_header.bytes_per_sec = SAMPLE_RATE*BIT_DEPTH/8; // byte rate 
-    // wav_header.bytes_per_samp = BIT_DEPTH/8;            // 2-bytes
-    // wav_header.bits_per_samp = BIT_DEPTH;               // 16-bits
+    wav_header.chunk_size = 16;                         // size of
+    wav_header.format_tag = 1;                          // PCM
+    wav_header.num_chans = 1;                           // mono
+    wav_header.srate = SAMPLE_RATE;                     // sample rate
+    wav_header.bytes_per_sec = SAMPLE_RATE*BIT_DEPTH/8; // byte rate 
+    wav_header.bytes_per_samp = BIT_DEPTH/8;            // 2-bytes
+    wav_header.bits_per_samp = BIT_DEPTH;               // 16-bits
 
-    // // swap bytes to obey big-endian format 
+    // swap bytes to obey big-endian format 
     // swap_byte_order_long(&wav_header.chunk_size);
     // swap_byte_order_short(&wav_header.format_tag);
     // swap_byte_order_short(&wav_header.num_chans);
@@ -121,9 +121,9 @@ void vTaskSTART(void * pvParameters)
             while(session_file==NULL) session_file = open_file(fname, "a");
 
             // write .wav file header to session file
-            // fseek(session_file, 0L, SEEK_SET);                                      // seek back to beginning of file
-            // fwrite(&wav_header, sizeof(struct wav_header_struct), 1, session_file); // write wav file header
-			// fsync(fileno(session_file));                                            // secure data writing
+            fseek(session_file, 0L, SEEK_SET);                                      // seek back to beginning of file
+            fwrite(&wav_header, sizeof(struct wav_header_struct), 1, session_file); // write wav file header
+			fsync(fileno(session_file));                                            // secure data writing
 
             // set flag informing that the recording already started
             xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
@@ -148,7 +148,7 @@ void vTaskSTART(void * pvParameters)
 void vTaskEND(void * pvParameters)
 {
     BaseType_t xHighPriorityTaskWoken = pdFALSE;
-    char text[128];
+    // char text[128];
     while(1)
     {
         if(xSemaphoreBTN_OFF!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn OFF recording
