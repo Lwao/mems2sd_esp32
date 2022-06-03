@@ -74,7 +74,7 @@ class PCM2PDM():
 
         plt.show()
 
-    def pdm_plot(self):
+    def pdm_plot(self, short=False):
         np.seterr(divide = 'ignore') 
 
         fig, axs = plt.subplots(nrows=2, ncols=2, dpi=100, figsize=(20,10))
@@ -94,8 +94,13 @@ class PCM2PDM():
         mag_os = 20*np.log10(np.abs(np.fft.fft(data_os)) / n)[:n // 2]
         mag_pdm = 20*np.log10(np.abs(np.fft.fft(data_pdm)) / n)[:n // 2]
 
-        axs[0,0].step(t, data_os, 'k')
-        axs[0,1].step(t, data_pdm, 'k')
+        if short:
+            axs[0,0].step(t[:n//200], data_os[:n//200], 'k')
+            axs[0,1].step(t[:n//200], data_pdm[:n//200], 'k')
+        else:
+            axs[0,0].step(t, data_os, 'k')
+            axs[0,1].step(t, data_pdm, 'k')
+        
         axs[1,0].plot(f, mag_os, 'k')
         axs[1,1].plot(f, mag_pdm, 'k')
 
