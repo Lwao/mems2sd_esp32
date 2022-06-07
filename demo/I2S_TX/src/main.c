@@ -13,8 +13,12 @@ void app_main()
     // fill data buffer
     for(int ii=0; ii<DMA_BUF_LEN_SMPL; ii++)
     {
-        if(ii%2) data[ii] = 0x11111111;
-        else data[ii] = 0xEEEEEEEE;
+        // if(ii%2) data[ii] = 0x11111111;
+        // else data[ii] = 0xEEEEEEEE;
+        // if(ii%2) data[ii] = 0x1111CCCC;
+        // else data[ii] = 0xEEEE5555;
+        if(ii%2) data[ii] = 0x01234567;
+        else data[ii] = 0x89ABCDEF;
     }
 
     // configure i2s

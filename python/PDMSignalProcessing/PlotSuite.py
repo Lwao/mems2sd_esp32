@@ -14,10 +14,10 @@ def full_plot(data, fs, short=False, title=''):
 
     if short: 
         axs[0].step(t[:n//10000], data[:n//10000], 'k')
-        axs[1].plot(f[:n//20], mag[:n//20], 'k')
+        axs[1].plot(f[:n//200], mag[:n//200], 'k')
     else: 
         axs[0].step(t, data, 'k')
-        axs[1].plot(f, mag, 'k')
+        axs[1].semilogx(f, mag, 'k')
 
     axs[0].set_ylabel('Amplitude')
     axs[0].set_xlabel('Time (s)')

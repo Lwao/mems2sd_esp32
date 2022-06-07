@@ -10,7 +10,7 @@ def gen_audio(fs=44100):
 
     t = np.arange(0, t_end, 1/fs)
     n = len(t)
-    f = 10000
+    f = 5000
     data = np.sin(2*np.pi*f*t)
     
     return data, fs

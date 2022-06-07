@@ -109,14 +109,8 @@
 10 -> 250kHz  = 250000;
 */
 #define SAMPLE_RATE_PDM2PCM 44100
-#define SAMPLE_RATE_PDM 62500 // 140000->4.8MHz, 62500->2MHz
+#define SAMPLE_RATE_PDM 31250 // 140000->4.8MHz, 62500->2MHz
 #define SAMPLE_RATE SAMPLE_RATE_PDM
-/* Bit depth
-16-bits = I2S_BITS_PER_SAMPLE_16BIT;
-32-bits = I2S_BITS_PER_SAMPLE_32BIT;
-*/
-#define BIT_DEPTH I2S_BITS_PER_SAMPLE_16BIT
-#define DATA_BUFFER_SIZE DMA_BUF_LEN_SMPL*BIT_DEPTH/8
 
 // gpio
 #define GPIO_INPUT_PIN_SEL1   (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
@@ -145,8 +139,10 @@
 
 // i2s 
 #define I2S_PORT_NUM     0
-#define DMA_BUF_COUNT    64
+#define DMA_BUF_COUNT    32
 #define DMA_BUF_LEN_SMPL 1024
+#define BIT_DEPTH I2S_BITS_PER_SAMPLE_32BIT
+#define DATA_BUFFER_SIZE DMA_BUF_LEN_SMPL*BIT_DEPTH/8
 
 // freetros
 #define configTICK_RATE_HZ 1000
@@ -208,14 +204,15 @@ i2s_pin_config_t i2s_pins_pdm = {
 // i2s acquisition config
 i2s_config_t i2s_config_i2s = {
     .mode = I2S_MODE_MASTER | I2S_MODE_RX,                // master driver | receiving data (RX)   
-    .sample_rate = 8000,                                  // sample rate (low power mode) clock=2*16*smpl_rate
+    .sample_rate = 8000,                                  // sample rate (low power mode) clock=2*bit_depth*smpl_rate
     .bits_per_sample = BIT_DEPTH,                         // 16bit resolution per sample
-    .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration (LL Layer defaults right-channel-second(LSB))
-    .communication_format = I2S_COMM_FORMAT_STAND_MSB,    // pcm data format
+    .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,         // mono audio configuration (LL Layer defaults right-channel-second(LSB))
+    .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
     .dma_buf_len = DMA_BUF_LEN_SMPL,                      // size of each buffer, 1024 max.
-    .use_apll = 1,                                        // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
-    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1              // interrupt level 1
+    .use_apll = I2S_CLK_APLL,                             // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
+    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,             // interrupt level 1
+    //.fixed_mclk = 0
 };
 
 // i2s pin config
@@ -249,7 +246,7 @@ struct timeval date = {// struct with date data
 };
 
 size_t bytes_read; // number of bytes read by i2s_read
-char dataBuffer[DATA_BUFFER_SIZE]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
+long dataBuffer[DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
 
 // sd card variables
 sdmmc_card_t* card;

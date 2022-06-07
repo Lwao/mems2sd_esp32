@@ -153,14 +153,16 @@ void vTaskEND(void * pvParameters)
     {
         if(xSemaphoreBTN_OFF!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn OFF recording
         {
-            // suspend tasks for recording mode
-            vTaskSuspend(xTaskRECHandle);
+            ESP_LOGI(END_REC_TAG, "Stoping recording...");
 
             // i2s stop
             ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
             // wait to get mutex indicating total end of rec task
             while(xSemaphoreTake(xMutex,portMAX_DELAY)==pdFALSE);
+
+            // suspend tasks for recording mode
+            vTaskSuspend(xTaskRECHandle);
 
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
@@ -215,7 +217,7 @@ void vTaskREC(void * pvParameters)
     i2s_event_t i2s_evt;
     while(1)
     {
-        while(
+        if(
             (xQueueData!=NULL)                               &&
             (xQueueReceive(xQueueData, &i2s_evt, 0)==pdTRUE) &&
             (i2s_evt.type == I2S_EVENT_RX_DONE)              &&
@@ -228,6 +230,7 @@ void vTaskREC(void * pvParameters)
             fwrite(dataBuffer, bytes_read, 1, session_file); // write buffer to sd card current file
 			fsync(fileno(session_file));
             xSemaphoreGive(xMutex);
+            //printf("%lx %lx %lx %lx\n", dataBuffer[0], dataBuffer[1], dataBuffer[2], dataBuffer[3]);
         }
         vTaskDelay(1);
         // if (evt.type == I2S_EVENT_RX_Q_OVF) printf("RX data dropped\n");
