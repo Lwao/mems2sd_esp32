@@ -1,4 +1,6 @@
 import numpy as np
+from scipy import signal
+import matplotlib.pyplot as plt
 from collections import deque
 
 class FIFO:
@@ -81,3 +83,16 @@ class CIC:
                 data_out.append(acc)
         
         return data_out
+    
+    def freqz(self):
+        sr = 44100
+        w, h = signal.freqz(b=[1, -1], a=1)
+        x = w * sr * 1.0 / (2 * np.pi)
+        y = 20 * np.log10(abs(h))
+        plt.figure(figsize=(10,5))
+        plt.semilogx(x, y)
+        plt.ylabel('Amplitude [dB]')
+        plt.xlabel('Frequency [Hz]')
+        plt.title('Frequency response')
+        plt.grid(which='both', linestyle='-', color='grey')
+        plt.show()
