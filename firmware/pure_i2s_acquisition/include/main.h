@@ -120,20 +120,7 @@
 #define GPIO_INPUT_PIN_SEL1   (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
 #define ESP_INTR_FLAG_DEFAULT 0
 
-// sd card
-#define MOUNT_POINT "/sdcard" // SD card mounting directory
-#define SPI_DMA_CHAN 1        // DMA channel to be used by the SPI peripheral
-
 // #define CONFIG_FREERTOS_HZ 100
-
-// spi bus
-#ifndef USE_SPI_MODE
-    #define USE_SPI_MODE    // define SPI mode
-    #define PIN_NUM_MISO 19 // SDI - Serial Data In
-    #define PIN_NUM_MOSI 23 // SDO - Serial Data Out
-    #define PIN_NUM_CLK  18 // System clock
-    #define PIN_NUM_CS   22 // Chip select
-#endif
 
 // pins
 #define MIC_CLOCK_PIN  GPIO_NUM_21  // gpio 21 - MEMS MIC clock in
@@ -150,10 +137,6 @@
 #define configTICK_RATE_HZ 1000
 
 // log flags
-#define INIT_SPI_TAG   "init_spi"
-#define DEINIT_SPI_TAG "deinit_spi"
-#define INIT_SD_TAG    "init_sd"
-#define DEINIT_SD_TAG  "deinit_sd"
 #define SD_CARD_TAG    "sd_card"
 #define MEMS_MIC_TAG   "mems_mic"
 #define START_REC_TAG  "start_rec"
@@ -164,8 +147,7 @@
 
 #define BIT_(shift) (1<<shift)
 
-enum events{REC_STARTED,   // flag informing that the recording session already started
-            SPI_BUS_FREE}; // flag indicating if there are devices attached to SPI bus or not
+enum events{REC_STARTED}; // flag informing that the recording session already started
 
 /*
  * Global variable declaration section
@@ -252,40 +234,6 @@ SemaphoreHandle_t xSemaphoreTimer;   // semaphore to interpret timer got interru
  * --------------------
  * Initialize functions prototypes to later be defined
  */
-
-/**
- * @brief Initialize SPI bus
- * 
- * @param host pointer to SPI bus host
- * 
- * @return Error code
- */
-int initialize_spi_bus(sdmmc_host_t* host);
-
-/**
- * @brief Deinitialize SPI bus
- * 
- * @param host pointer to SPI bus host
- * 
- */
-void deinitialize_spi_bus(sdmmc_host_t* host);
-
-/**
- * @brief Mount SD card filesystem
- * 
- * @param host pointer to SPI bus host
- * @param card pointer to SD card host
- * 
- * @return Error code
- */
-int initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card);
-
-/**
- * @brief Unmount SD card filesystem
- * 
- * @param card pointer to SD card host
- */
-void deinitialize_sd_card(sdmmc_card_t** card);
 
 /**
  * @brief Task to acquire and save audio data into SD card
