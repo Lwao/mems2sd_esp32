@@ -109,7 +109,7 @@
 10 -> 250kHz  = 250000;
 */
 #define SAMPLE_RATE_PDM2PCM 44100
-#define SAMPLE_RATE_PDM 31250 // 140000->4.8MHz, 62500->2MHz
+#define SAMPLE_RATE_PDM 78125 // 75000->4.8MHz, 31250->2MHz, 62500->4MHz, 55kHz->3.52MHz 
 #define SAMPLE_RATE SAMPLE_RATE_PDM
 
 // gpio
@@ -121,15 +121,6 @@
 #define SPI_DMA_CHAN 1        // DMA channel to be used by the SPI peripheral
 
 // #define CONFIG_FREERTOS_HZ 100
-
-// spi bus
-#ifndef USE_SPI_MODE
-    #define USE_SPI_MODE    // define SPI mode
-    #define PIN_NUM_MISO 19 // SDI - Serial Data In
-    #define PIN_NUM_MOSI 23 // SDO - Serial Data Out
-    #define PIN_NUM_CLK  18 // System clock
-    #define PIN_NUM_CS   22 // Chip select
-#endif
 
 // pins
 #define MIC_CLOCK_PIN  GPIO_NUM_21  // gpio 21 - MEMS MIC clock in
@@ -157,6 +148,7 @@
 #define START_REC_TAG  "start_rec"
 #define END_REC_TAG    "end_rec"
 #define SETUP_APP_TAG  "setup_app"
+#define PARSE_CONFIG_TAG  "parse_config"
 
 // event flags
 
@@ -189,7 +181,7 @@ i2s_config_t i2s_config_pdm = {
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
     .dma_buf_len = DMA_BUF_LEN_SMPL,                      // size of each buffer, 1024 max.
-    .use_apll = 1,                                        // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
+    .use_apll = I2S_CLK_APLL,                             // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1              // interrupt level 1
 };
 
@@ -207,10 +199,10 @@ i2s_config_t i2s_config_i2s = {
     .sample_rate = 8000,                                  // sample rate (low power mode) clock=2*bit_depth*smpl_rate
     .bits_per_sample = BIT_DEPTH,                         // 16bit resolution per sample
     .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,         // mono audio configuration (LL Layer defaults right-channel-second(LSB))
-    .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
+    .communication_format = I2S_COMM_FORMAT_STAND_MSB,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
     .dma_buf_len = DMA_BUF_LEN_SMPL,                      // size of each buffer, 1024 max.
-    .use_apll = I2S_CLK_APLL,                             // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
+    .use_apll = 0,//I2S_CLK_APLL,                             // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,             // interrupt level 1
     //.fixed_mclk = 0
 };
@@ -221,28 +213,6 @@ i2s_pin_config_t i2s_pins_i2s = {
     .ws_io_num = I2S_PIN_NO_CHANGE,         
     .data_out_num = I2S_PIN_NO_CHANGE,  
     .data_in_num = MIC_DATA_PIN         // data in pin
-};
-
-
-// wav file header https://forum.arduino.cc/t/creating-a-wav-file-header/314260/4
-struct wav_header_struct {
-    char  riff[4];        /* "RIFF" little endian and "RIFX" big endian */
-    long  flength;        /* file length in bytes                       */
-    char  wave[4];        /* "WAVE"                                     */
-    char  fmt[4];         /* "fmt "                                     */
-    long  chunk_size;     /* size of FMT chunk in bytes (usually 16)    */
-    short format_tag;     /* 1=PCM, 257=Mu-Law, 258=A-Law, 259=ADPCM    */
-    short num_chans;      /* 1=mono, 2=stereo                           */
-    long  srate;          /* Sampling rate in samples per second        */
-    long  bytes_per_sec;  /* bytes per second = srate*bytes_per_samp    */
-    short bytes_per_samp; /* 2=16-bit mono, 4=16-bit stereo             */
-    short bits_per_samp;  /* Number of bits per sample                  */
-    char  data[4];        /* "data"                                     */
-    long  dlength;        /* data length in bytes (filelength - 44)     */
-} wav_header;
-
-struct timeval date = {// struct with date data
-    .tv_sec = 0, // current date in seconds (to be fecthed from NTP)
 };
 
 size_t bytes_read; // number of bytes read by i2s_read
@@ -268,45 +238,40 @@ SemaphoreHandle_t xSemaphoreBTN_ON;  // semaphore to interpret button as start b
 SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreTimer;   // semaphore to interpret timer got interrupt [semaphore_handle]
 
+// wav file header https://forum.arduino.cc/t/creating-a-wav-file-header/314260/4
+struct wav_header_struct {
+    char  riff[4];        /* "RIFF" little endian and "RIFX" big endian */
+    long  flength;        /* file length in bytes                       */
+    char  wave[4];        /* "WAVE"                                     */
+    char  fmt[4];         /* "fmt "                                     */
+    long  chunk_size;     /* size of FMT chunk in bytes (usually 16)    */
+    short format_tag;     /* 1=PCM, 257=Mu-Law, 258=A-Law, 259=ADPCM    */
+    short num_chans;      /* 1=mono, 2=stereo                           */
+    long  srate;          /* Sampling rate in samples per second        */
+    long  bytes_per_sec;  /* bytes per second = srate*bytes_per_samp    */
+    short bytes_per_samp; /* 2=16-bit mono, 4=16-bit stereo             */
+    short bits_per_samp;  /* Number of bits per sample                  */
+    char  data[4];        /* "data"                                     */
+    long  dlength;        /* data length in bytes (filelength - 44)     */
+} wav_header;
+
+struct timeval date = {// struct with date data
+    .tv_sec = 0, // current date in seconds (to be fecthed from NTP)
+};
+
+typedef struct 
+{
+    int record_file_name_sufix;
+    int sampling_rate;
+    int record_session_duration;
+} config_file_t;
+
+
 /*
  * Function prototype section
  * --------------------
  * Initialize functions prototypes to later be defined
  */
-
-/**
- * @brief Initialize SPI bus
- * 
- * @param host pointer to SPI bus host
- * 
- * @return Error code
- */
-int initialize_spi_bus(sdmmc_host_t* host);
-
-/**
- * @brief Deinitialize SPI bus
- * 
- * @param host pointer to SPI bus host
- * 
- */
-void deinitialize_spi_bus(sdmmc_host_t* host);
-
-/**
- * @brief Mount SD card filesystem
- * 
- * @param host pointer to SPI bus host
- * @param card pointer to SD card host
- * 
- * @return Error code
- */
-int initialize_sd_card(sdmmc_host_t* host, sdmmc_card_t** card);
-
-/**
- * @brief Unmount SD card filesystem
- * 
- * @param card pointer to SD card host
- */
-void deinitialize_sd_card(sdmmc_card_t** card);
 
 /**
  * @brief Task to acquire and save audio data into SD card

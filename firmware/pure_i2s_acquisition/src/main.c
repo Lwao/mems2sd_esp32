@@ -130,7 +130,7 @@ void vTaskSTART(void * pvParameters)
 
             // start i2s
             ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));        // start i2s clocking mic to low-power mode
-            vTaskDelay(100);                                 // structural delay to changes take place
+            vTaskDelay(pdMS_TO_TICKS(100));                 // structural delay to changes take place
             i2s_set_sample_rates(I2S_PORT_NUM, SAMPLE_RATE); // change mic to ultrasonic mode
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
@@ -225,8 +225,9 @@ void vTaskREC(void * pvParameters)
         {
             // ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
             i2s_read(I2S_PORT_NUM, (void*) dataBuffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
-            fwrite(dataBuffer, bytes_read, 1, session_file); // write buffer to sd card current file
-			fsync(fileno(session_file));
+            printf("%x %x %x %x %x %x %x\n", dataBuffer[0], dataBuffer[1], dataBuffer[2], dataBuffer[3], dataBuffer[4], dataBuffer[5], dataBuffer[6]);
+            // fwrite(dataBuffer, bytes_read, 1, session_file); // write buffer to sd card current file
+            // fsync(fileno(session_file));
             xSemaphoreGive(xMutex);
         }
         vTaskDelay(1);

@@ -45,12 +45,11 @@ class Comb:
 
     def process(self, data_in):
         data_in = check_over_under_flow(data_in)
-        self.actual = check_over_under_flow(self.actual)
-
-        _ = self.fifo.push(self.actual)
-        self.previous = self.fifo.seek_last() #self.actual
         self.actual = data_in
+
+        self.previous = self.fifo.seek_last() #self.actual
         self.diff = self.actual - self.previous
+        _ = self.fifo.push(self.actual)
         
         # check for overflow/underflow
         self.diff = check_over_under_flow(self.diff)
@@ -79,20 +78,7 @@ class CIC:
             if (index % self.R) == 0: # decimation
                 for c in range(self.N): # comb step
                     acc = self.comb_stages[c].process(acc)
-                #data_out.append(acc/self.gain)
+                # data_out.append(acc/self.gain)
                 data_out.append(acc)
         
         return data_out
-    
-    def freqz(self):
-        sr = 44100
-        w, h = signal.freqz(b=[1, -1], a=1)
-        x = w * sr * 1.0 / (2 * np.pi)
-        y = 20 * np.log10(abs(h))
-        plt.figure(figsize=(10,5))
-        plt.semilogx(x, y)
-        plt.ylabel('Amplitude [dB]')
-        plt.xlabel('Frequency [Hz]')
-        plt.title('Frequency response')
-        plt.grid(which='both', linestyle='-', color='grey')
-        plt.show()

@@ -108,7 +108,7 @@
 9  -> 192kHz  = 192000;
 10 -> 250kHz  = 250000;
 */
-#define SAMPLE_RATE 44100
+#define SAMPLE_RATE 44100 // max.109700 (acima de 109800 fica ruim e mais acima sem dados)
 /* Bit depth
 0 -> 8-bits  = I2S_BITS_PER_SAMPLE_8BIT ;
 1 -> 16-bits = I2S_BITS_PER_SAMPLE_16BIT;
@@ -167,13 +167,13 @@ gpio_config_t in_conf1 = {
 // i2s acquisition config
 i2s_config_t i2s_config = {
     .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // master driver | receiving data (RX) | in PDM modulation  
-    .sample_rate = 8000,                                  // sample rate (low power mode)
+    .sample_rate = 31250,                                  // sample rate (low power mode)
     .bits_per_sample = BIT_DEPTH,                         // 16bit resolution per sample
     .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
     .dma_buf_len = DMA_BUF_LEN_SMPL,                      // size of each buffer, 1024 max.
-    .use_apll = 1,                                        // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
+    .use_apll = I2S_CLK_APLL,                             // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1              // interrupt level 1
 };
 

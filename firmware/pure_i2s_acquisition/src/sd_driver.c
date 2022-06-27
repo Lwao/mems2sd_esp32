@@ -123,7 +123,7 @@ int initialize_spi_bus(sdmmc_host_t* host)
     ESP_LOGI(INIT_SPI_TAG, "Initializing SPI bus!");
 
     sdmmc_host_t host_temp = SDSPI_HOST_DEFAULT();
-    // host_temp.max_freq_khz = SDMMC_FREQ_PROBING;//100;
+    // host_temp.max_freq_khz = SDMMC_FREQ_HIGHSPEED;//100;
     //host_temp.command_timeout_ms = 100;
 
     spi_bus_config_t bus_cfg = {
