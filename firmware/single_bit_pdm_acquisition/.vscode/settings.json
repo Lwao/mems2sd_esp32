@@ -9,6 +9,8 @@
         "timer_group_struct.h": "c",
         "timer_group_reg.h": "c",
         "queue.h": "c",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "wav_header.h": "c",
+        "esp_err.h": "c"
     }
 }

@@ -25,6 +25,7 @@
  */
 
 #include "sd_driver.h"
+#include "wav_header.h"
 
 #ifndef C_POSIX_LIB_INCLUDED
     #define C_POSIX_LIB_INCLUDED
@@ -148,7 +149,6 @@
 #define START_REC_TAG  "start_rec"
 #define END_REC_TAG    "end_rec"
 #define SETUP_APP_TAG  "setup_app"
-#define PARSE_CONFIG_TAG  "parse_config"
 
 // event flags
 
@@ -238,34 +238,12 @@ SemaphoreHandle_t xSemaphoreBTN_ON;  // semaphore to interpret button as start b
 SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreTimer;   // semaphore to interpret timer got interrupt [semaphore_handle]
 
-// wav file header https://forum.arduino.cc/t/creating-a-wav-file-header/314260/4
-struct wav_header_struct {
-    char  riff[4];        /* "RIFF" little endian and "RIFX" big endian */
-    long  flength;        /* file length in bytes                       */
-    char  wave[4];        /* "WAVE"                                     */
-    char  fmt[4];         /* "fmt "                                     */
-    long  chunk_size;     /* size of FMT chunk in bytes (usually 16)    */
-    short format_tag;     /* 1=PCM, 257=Mu-Law, 258=A-Law, 259=ADPCM    */
-    short num_chans;      /* 1=mono, 2=stereo                           */
-    long  srate;          /* Sampling rate in samples per second        */
-    long  bytes_per_sec;  /* bytes per second = srate*bytes_per_samp    */
-    short bytes_per_samp; /* 2=16-bit mono, 4=16-bit stereo             */
-    short bits_per_samp;  /* Number of bits per sample                  */
-    char  data[4];        /* "data"                                     */
-    long  dlength;        /* data length in bytes (filelength - 44)     */
-} wav_header;
-
 struct timeval date = {// struct with date data
     .tv_sec = 0, // current date in seconds (to be fecthed from NTP)
 };
 
-typedef struct 
-{
-    int record_file_name_sufix;
-    int sampling_rate;
-    int record_session_duration;
-} config_file_t;
-
+config_file_t config_file;
+wav_header_t wav_header;
 
 /*
  * Function prototype section
@@ -300,17 +278,17 @@ void vTaskEND(void * pvParameters);
 static void IRAM_ATTR ISR_BTN();
 
 /**
- * @brief Byte swap to compensate reversed endianness of ESP32 I2S peripheral (short).
- * 
- * @param s short integer to revert
+ * @brief Parse config.txt file in SD card file system to acquire system configurations.
  */
-void swap_byte_order_short(short* s);
+void parse_config_file();
 
 /**
- * @brief Byte swap to compensate reversed endianness of ESP32 I2S peripheral (long).
+ * @brief Initialize config file structure with default values (in case fetching from SD card does not work).
  * 
- * @param l long integer to revert
+ * @return Config file structure fully initialized.
  */
-void swap_byte_order_long(long* l);
+config_file_t init_config_file();
+
+
 
 #endif //_MAIN_H_

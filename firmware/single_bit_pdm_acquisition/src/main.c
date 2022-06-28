@@ -14,98 +14,9 @@
  * Main function with general single time configuration in BOOT time
  */
 
-config_file_t init_config_file()
-{
-    config_file_t var;
-
-    var.record_file_name_sufix = 1;
-	var.sampling_rate = 8000;
-	var.record_session_duration = 10;
-
-    return var;
-}
-
-void parse_config_file()
-{
-    // initialize SPI bus and mount SD card
-    while(initialize_spi_bus(&host)!=1){vTaskDelay(100);}
-    while(initialize_sd_card(&host, &card)!=1){vTaskDelay(100);}
-    vTaskDelay(100);
-
-    char line[256], *token_name;
-	int token_value;
-    config_file_t configurations = init_config_file();
-
-    FILE* config_file = open_file("config.txt", "r");
-    
-    if(config_file)
-    {
-        while (fgets(line, sizeof(line), config_file))
-        {
-            token_name = strtok(line, "=");
-            token_value = atoi(strtok(NULL, ";"));
-            
-            if(strcmp(token_name, "record_file_name_sufix")==0) configurations.record_file_name_sufix = token_value;
-            if(strcmp(token_name, "sampling_rate")==0) configurations.sampling_rate = token_value;
-            if(strcmp(token_name, "record_session_duration")==0) configurations.record_session_duration = token_value;
-        }
-    }
-
-    close_file(&config_file);
-
-    char* session_fname;
-	while(1)
-	{
-		asprintf(&session_fname, "REC%d.WAV",  configurations.record_file_name_sufix);
-		FILE *test_file;
-    
-    	if ((test_file = open_file(session_fname, "r"))) 
-    	{
-        	close_file(&test_file);
-            ESP_LOGI(PARSE_CONFIG_TAG, "File exists: %s\n", session_fname);
-        	//printf("file exists: %s\n", session_fname);
-        	configurations.record_file_name_sufix++;
-    	}
-    	else 
-    	{
-    		ESP_LOGI(PARSE_CONFIG_TAG, "File does not exist: %s\n", session_fname);
-            // printf("File does not exist: %s\n", session_fname);
-    		break;
-    	}
-	}
-	free(session_fname);
-
-    printf("%d\n%d\n%d\n", configurations.record_file_name_sufix, configurations.sampling_rate, configurations.record_session_duration);
-
-    // dismount SD card and free SPI bus (in the given order) 
-    deinitialize_sd_card(&card);
-    deinitialize_spi_bus(&host);
-}
-
 void app_main(void)
 {  
-    // wav file header initialization
-    memcpy(wav_header.riff, "RIFX", 4);
-    memcpy(wav_header.wave, "WAVE", 4);
-    memcpy(wav_header.fmt,  "fmt ", 4);
-    memcpy(wav_header.data, "data", 4);
-  
-    wav_header.chunk_size = 16;                         // size of
-    wav_header.format_tag = 1;                          // PCM
-    wav_header.num_chans = 1;                           // mono
-    wav_header.srate = SAMPLE_RATE;                     // sample rate
-    wav_header.bytes_per_sec = SAMPLE_RATE*BIT_DEPTH/8; // byte rate 
-    wav_header.bytes_per_samp = BIT_DEPTH/8;            // 2-bytes
-    wav_header.bits_per_samp = BIT_DEPTH;               // 16-bits
-
-    // swap bytes to obey big-endian format 
-    // swap_byte_order_long(&wav_header.chunk_size);
-    // swap_byte_order_short(&wav_header.format_tag);
-    // swap_byte_order_short(&wav_header.num_chans);
-    // swap_byte_order_long(&wav_header.srate);
-    // swap_byte_order_long(&wav_header.bytes_per_sec);
-    // swap_byte_order_short(&wav_header.bytes_per_samp);
-    // swap_byte_order_short(&wav_header.bits_per_samp);
+    
 
     BaseType_t xReturnedTask[3];
 
@@ -119,7 +30,7 @@ void app_main(void)
     ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins_i2s));
     ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
-    parse_config_file();
+    // parse_config_file();
 
     // create semaphores/event groups
     xEvents           = xEventGroupCreate();
@@ -191,10 +102,8 @@ void vTaskSTART(void * pvParameters)
             // open new file in append mode
             while(session_file==NULL) session_file = open_file(fname, "a");
 
-            // write .wav file header to session file
-            fseek(session_file, 0L, SEEK_SET);                                      // seek back to beginning of file
-            fwrite(&wav_header, sizeof(struct wav_header_struct), 1, session_file); // write wav file header
-			fsync(fileno(session_file));                                            // secure data writing
+            // write first part of .wav header
+            init_wav_header(&session_file, &wav_header, SAMPLE_RATE, BIT_DEPTH);
 
             // set flag informing that the recording already started
             xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
@@ -219,7 +128,6 @@ void vTaskSTART(void * pvParameters)
 void vTaskEND(void * pvParameters)
 {
     BaseType_t xHighPriorityTaskWoken = pdFALSE;
-    // char text[128];
     while(1)
     {
         if(xSemaphoreBTN_OFF!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn OFF recording
@@ -237,29 +145,9 @@ void vTaskEND(void * pvParameters)
 
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
-            // // finish .wav file format structure
-            // fseek(session_file, 0L, SEEK_END);                               // seek to end of session file
-            // wav_header.flength = ftell(session_file);                        // get file size
-            // wav_header.dlength = wav_header.flength-44;                      // get data size (file size minus wav file header size)
-            // swap_byte_order_long(&wav_header.flength);                       // swap byte order to invert endianness
-            // swap_byte_order_long(&wav_header.dlength);                       // swap byte order to invert endianness
-            // close_file(&session_file);                                       // close file that was open in append mode
-            
-            // while(session_file==NULL) session_file = open_file(fname, "r+"); // re-open file in read-write mode
-            // fgets(text, 127, session_file);                                  // get initial sample text from file header
+            // finish to write the .wav header by extracting size of payload
+            finish_wav_header(&session_file, &wav_header, fname);
 
-            // fseek(session_file, 4, SEEK_SET);                                // offset file pointer to end of "RIFX"            
-            // fputc((wav_header.flength >> 24) & 255, session_file);           // distribute bytes o file length to specific position
-            // fputc((wav_header.flength >> 16) & 255, session_file);           // distribute bytes o file length to specific position
-            // fputc((wav_header.flength >> 8) & 255, session_file);            // distribute bytes o file length to specific position
-            // fputc((wav_header.flength >> 0) & 255, session_file);            // distribute bytes o file length to specific position
-            
-            // fseek(session_file, 40, SEEK_SET);                               // offset file pointer to end of "data"            
-            // fputc((wav_header.dlength >> 24) & 255, session_file);           // distribute bytes o data length to specific position
-            // fputc((wav_header.dlength >> 16) & 255, session_file);           // distribute bytes o data length to specific position
-            // fputc((wav_header.dlength >> 8) & 255, session_file);            // distribute bytes o data length to specific position
-            // fputc((wav_header.dlength >> 0) & 255, session_file);            // distribute bytes o data length to specific position
-            
             // close file in use
             close_file(&session_file);
             
@@ -320,24 +208,4 @@ static void IRAM_ATTR ISR_BTN()
     if(xEventGroupGetBitsFromISR(xEvents) & BIT_(REC_STARTED)){xSemaphoreGiveFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken);} // recording started, so stop recording
     else{xSemaphoreGiveFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken);} // recording stopd, so start recording
     portYIELD_FROM_ISR(xHighPriorityTaskWoken);
-}
-
-/*
- * Peripheral section
- * --------------------
- * Declaration of functions responsible to (de)initializa peripherals such as SPI bus or SD card host
- */
-
-void swap_byte_order_short(short* s)
-{
-    (*s) = ((*s) >> 8) |
-           ((*s) << 8);
-}
-
-void swap_byte_order_long(long* l)
-{
-    (*l) = ((*l) >> 24) |
-           (((*l)<<8) & 0x00FF0000) |
-           (((*l)>>8) & 0x0000FF00) |
-           ((*l) << 24);
 }

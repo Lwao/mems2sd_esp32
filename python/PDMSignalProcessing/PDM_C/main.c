@@ -1,4 +1,18 @@
-// C:\MinGW\bin\gcc.exe -fdiagnostics-color=always -g main.c -o main.exe & main.exe
+/**
+ * @file cic.c
+ * @brief 
+ *
+ * @author Levy Gabriel da S. G.
+ * @date June 26 2021
+ */
+/**
+ * @file cic.h
+ * @brief 
+ *
+ * @author Levy Gabriel da S. G.
+ * @date June 26 2021
+ */
+// gcc main.c -o main.exe && main.exe
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,24 +21,24 @@
 #include <assert.h>
 #include <math.h>
 
-typedef long sample_t;
+typedef short sample_t;
 
 typedef struct {
     size_t head, tail, size;
     size_t capacity;
-    sample_t* data;
+    long* data;
 } fifo_t;
 
 typedef struct 
 {
-    sample_t acc;
+    long acc;
 } integrator_t;
 
 typedef struct 
 {
-    sample_t previous;
-    sample_t actual;
-    sample_t diff;
+    long previous;
+    long actual;
+    long diff;
     char delay;
     fifo_t fifo;
 } comb_t;
@@ -43,16 +57,16 @@ typedef struct
 
 
 void init_fifo(fifo_t *fifo, size_t size);
-void enqueue(fifo_t *fifo, sample_t data_in);
-void dequeue(fifo_t *fifo, sample_t *data_out);
+void enqueue(fifo_t *fifo, long data_in);
+void dequeue(fifo_t *fifo, long *data_out);
 
 void init_integrator(integrator_t *integ);
 void init_comb(comb_t *comb, char delay);
 void init_cic(cic_t *cic, int N, int R, int M);
 
-sample_t process_integrator(integrator_t *integ, sample_t data_in);
-sample_t process_comb(comb_t *comb, sample_t data_in);
-sample_t process_cic(cic_t *cic, sample_t data_in, char *data_available);
+long process_integrator(integrator_t *integ, long data_in);
+long process_comb(comb_t *comb, long data_in);
+sample_t process_cic(cic_t *cic, long data_in, char *data_available);
 
 long swap_bytes_of_word(long x);
 
@@ -62,8 +76,8 @@ long swap_bytes_of_word(long x);
 #define APPLY_MASK(x,i) ((x>>(32-1-i))&0x00000001)
 #define QUEUE_SIZE 2
 
-#define MAX_OVERFLOW (sample_t)(pow(2,30)-1)
-#define MIN_OVERFLOW (sample_t)(-pow(2,30))
+#define MAX_OVERFLOW  1073741823 // (long)(pow(2,30)-1)
+#define MIN_OVERFLOW -1073741824 // (long)(-pow(2,30))
 
 long buffer[SAMPLES];
 
@@ -71,7 +85,8 @@ int main()
 {
     cic_t cic;
     char data_available=0;
-    sample_t data_out=0, data_in=0;
+    long data_in=0;
+    sample_t data_out=0;
 
     int N=2;
     int R=16;
@@ -90,7 +105,7 @@ int main()
     {
         while(fscanf(fileb, "%d", &data_in) != EOF)
         {
-            data_out = process_cic(&cic, (sample_t)data_in, &data_available);
+            data_out = (sample_t) process_cic(&cic, (long)data_in, &data_available);
             if(data_available==1) fprintf(filetxt, "%d\n", data_out);
         }
     }
@@ -135,17 +150,18 @@ void init_fifo(fifo_t *fifo, size_t size)
     fifo->capacity = size;
     fifo->tail = fifo->size = 0;
     fifo->head = fifo->capacity-1;
-    fifo->data = (sample_t*) malloc(fifo->capacity * sizeof(sample_t));
+    fifo->data = (long*) malloc(fifo->capacity * sizeof(long));
 }
 
-void enqueue(fifo_t *fifo, sample_t data_in)
+void enqueue(fifo_t *fifo, long data_in)
 {
     if(fifo->size == fifo->capacity) return;
     fifo->head = (fifo->head+1) % fifo->capacity;
     fifo->data[fifo->head] = data_in;
     fifo->size++;
 }
-void dequeue(fifo_t *fifo, sample_t *data_out)
+
+void dequeue(fifo_t *fifo, long *data_out)
 {
     if(fifo->size == 0) return;
     *data_out = fifo->data[fifo->tail];
@@ -155,19 +171,19 @@ void dequeue(fifo_t *fifo, sample_t *data_out)
 
 void init_integrator(integrator_t *integ)
 {
-    integ->acc = (sample_t) 0;
+    integ->acc = (long) 0;
 }
 
 void init_comb(comb_t *comb, char delay)
 {
-    comb->previous = (sample_t) 0;
-    comb->actual = (sample_t) 0;
-    comb->diff = (sample_t) 0;
-    comb->previous = (sample_t) 0;
+    comb->previous = (long) 0;
+    comb->actual = (long) 0;
+    comb->diff = (long) 0;
+    comb->previous = (long) 0;
     comb->delay = (char) delay;
     init_fifo(&comb->fifo, delay);
     // comb->fifo = (fifo_t) {0, 0, (size_t)delay+1, malloc(sizeof(void*) * ((size_t)delay+1))};
-    for(int ii=0; ii<delay; ii++) enqueue(&comb->fifo, (sample_t)0);
+    for(int ii=0; ii<delay; ii++) enqueue(&comb->fifo, (long)0);
 }
 
 void init_cic(cic_t *cic, int N, int R, int M)
@@ -186,101 +202,39 @@ void init_cic(cic_t *cic, int N, int R, int M)
     cic->count = 0;
 }
 
-sample_t process_integrator(integrator_t *integ, sample_t data_in)
+long process_integrator(integrator_t *integ, long data_in)
 {
-    if (data_in>=MAX_OVERFLOW) 
-    {
-        printf("here1: %d, %d\n", data_in, integ->acc);
-        data_in -= MAX_OVERFLOW;
-    }
-    if (data_in<=MIN_OVERFLOW) 
-    {
-        printf("here2: %d, %d\n", data_in, integ->acc);
-        data_in -= MIN_OVERFLOW;
-    }
+    if (data_in>=MAX_OVERFLOW) data_in -= MAX_OVERFLOW;
+    if (data_in<=MIN_OVERFLOW) data_in -= MIN_OVERFLOW;
     
     integ->acc += data_in;
 
-    if (integ->acc>=MAX_OVERFLOW) 
-    {
-        printf("here3: %d, %d\n", data_in, integ->acc);
-        integ->acc -= MAX_OVERFLOW;
-    }
-    if (integ->acc<=MIN_OVERFLOW) 
-    {
-        printf("here4: %d, %d\n", data_in, integ->acc);
-        integ->acc -= MIN_OVERFLOW;
-        
-    }
+    if (integ->acc>=MAX_OVERFLOW) integ->acc -= MAX_OVERFLOW;
+    if (integ->acc<=MIN_OVERFLOW) integ->acc -= MIN_OVERFLOW;
 
     return integ->acc;
 }
 
-sample_t process_comb(comb_t *comb, sample_t data_in)
+long process_comb(comb_t *comb, long data_in)
 {
-    if (data_in>=MAX_OVERFLOW) 
-    {
-        printf("here5: %d, %d, %d, %d\n", data_in, comb->actual, comb->previous, comb->diff);
-        data_in -= MAX_OVERFLOW;
-    }
-    if (data_in<=MIN_OVERFLOW) 
-    {
-        printf("here6: %d, %d, %d, %d\n", data_in, comb->actual, comb->previous, comb->diff);
-        data_in -= MIN_OVERFLOW;
-    }
+    if (data_in>=MAX_OVERFLOW) data_in -= MAX_OVERFLOW;
+    if (data_in<=MIN_OVERFLOW) data_in -= MIN_OVERFLOW;
     comb->actual = data_in;
     
     dequeue(&comb->fifo, &comb->previous);    
     comb->diff = comb->actual - comb->previous;
     enqueue(&comb->fifo, comb->actual);
 
-    if (comb->diff>=MAX_OVERFLOW) 
-    {
-        printf("here7: %d, %d, %d, %d\n", data_in, comb->actual, comb->previous, comb->diff);
-        comb->diff -= MAX_OVERFLOW;
-    }
-    if (comb->diff<=MIN_OVERFLOW) 
-    {
-        printf("here8: %d, %d, %d, %d\n", data_in, comb->actual, comb->previous, comb->diff);
-        comb->diff -= MIN_OVERFLOW;
-    }
+    if (comb->diff>=MAX_OVERFLOW) comb->diff -= MAX_OVERFLOW;
+    if (comb->diff<=MIN_OVERFLOW) comb->diff -= MIN_OVERFLOW;
 
     return comb->diff;
 }
 
-// sample_t process_integrator(integrator_t *integ, sample_t data_in)
-// {
-//     if (data_in>=MAX_OVERFLOW) data_in -= MAX_OVERFLOW;
-//     if (data_in<=MIN_OVERFLOW) data_in -= MIN_OVERFLOW;
-    
-//     integ->acc += data_in;
-
-//     if (integ->acc>=MAX_OVERFLOW) integ->acc -= MAX_OVERFLOW;
-//     if (integ->acc<=MIN_OVERFLOW) integ->acc -= MIN_OVERFLOW;
-
-//     return integ->acc;
-// }
-
-// sample_t process_comb(comb_t *comb, sample_t data_in)
-// {
-//     if (data_in>=MAX_OVERFLOW) data_in -= MAX_OVERFLOW;
-//     if (data_in<=MIN_OVERFLOW) data_in -= MIN_OVERFLOW;
-//     comb->actual = data_in;
-    
-//     dequeue(&comb->fifo, &comb->previous);    
-//     comb->diff = comb->actual - comb->previous;
-//     enqueue(&comb->fifo, comb->actual);
-
-//     if (comb->diff>=MAX_OVERFLOW) comb->diff -= MAX_OVERFLOW;
-//     if (comb->diff<=MIN_OVERFLOW) comb->diff -= MIN_OVERFLOW;
-
-//     return comb->diff;
-// }
-
-sample_t process_cic(cic_t *cic, sample_t data_in, char *data_available)
+sample_t process_cic(cic_t *cic, long data_in, char *data_available)
 {
     *data_available = 0;
-    sample_t acc = data_in;
+    long acc = data_in;
 
     for(int ii=0; ii<cic->N; ii++) acc = process_integrator(&cic->integrators[ii], acc);
     
@@ -290,5 +244,5 @@ sample_t process_cic(cic_t *cic, sample_t data_in, char *data_available)
         *data_available = 1;
     }
     cic->count++;
-    return acc;
+    return (sample_t)acc;
 }
