@@ -21,9 +21,14 @@
     #include <stdio.h>
     #include <stdlib.h>
     #include <string.h>
+    #include <stdint.h>
+    #include <math.h>
     #include <sys/unistd.h>
     #include <sys/stat.h>
 #endif //C_POSIX_LIB_INCLUDED
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "sd_driver.h"
 
@@ -34,9 +39,10 @@ typedef struct
     int record_file_name_sufix;
     int sampling_rate;
     int record_session_duration;
+    char file_name[256];
 } config_file_t;
 
-void init_config_file(config_file_t *config_file);
-void parse_config_file();
+void init_config_file(config_file_t *configurations);
+void parse_config_file(sdmmc_host_t* host, sdmmc_card_t** card, config_file_t *configurations);
 
 #endif // _CONFIG_FILE_H_

@@ -21,6 +21,8 @@
     #include <stdio.h>
     #include <stdlib.h>
     #include <string.h>
+    #include <stdint.h>
+    #include <math.h>
     #include <sys/unistd.h>
     #include <sys/stat.h>
 #endif //C_POSIX_LIB_INCLUDED

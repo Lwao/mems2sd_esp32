@@ -25,13 +25,17 @@
  */
 
 #include "sd_driver.h"
+#include "led_driver.h"
 #include "wav_header.h"
+#include "config_file.h"
 
 #ifndef C_POSIX_LIB_INCLUDED
     #define C_POSIX_LIB_INCLUDED
     #include <stdio.h>
     #include <stdlib.h>
     #include <string.h>
+    #include <stdint.h>
+    #include <math.h>
     #include <sys/unistd.h>
     #include <sys/stat.h>
 #endif //C_POSIX_LIB_INCLUDED
@@ -144,7 +148,7 @@
 #define DEINIT_SPI_TAG "deinit_spi"
 #define INIT_SD_TAG    "init_sd"
 #define DEINIT_SD_TAG  "deinit_sd"
-#define SD_CARD_TAG    "sd_card"
+#define SD_CARD_TAG    "sd_config"
 #define MEMS_MIC_TAG   "mems_mic"
 #define START_REC_TAG  "start_rec"
 #define END_REC_TAG    "end_rec"
@@ -242,7 +246,7 @@ struct timeval date = {// struct with date data
     .tv_sec = 0, // current date in seconds (to be fecthed from NTP)
 };
 
-config_file_t config_file;
+config_file_t configurations;
 wav_header_t wav_header;
 
 /*
@@ -276,19 +280,5 @@ void vTaskEND(void * pvParameters);
  * @brief Interrupt service routine for button pressed (associated with BOOT button a.k.a GPIO0)
  */
 static void IRAM_ATTR ISR_BTN();
-
-/**
- * @brief Parse config.txt file in SD card file system to acquire system configurations.
- */
-void parse_config_file();
-
-/**
- * @brief Initialize config file structure with default values (in case fetching from SD card does not work).
- * 
- * @return Config file structure fully initialized.
- */
-config_file_t init_config_file();
-
-
 
 #endif //_MAIN_H_

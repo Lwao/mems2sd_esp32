@@ -16,8 +16,6 @@
 
 void app_main(void)
 {  
-    
-
     BaseType_t xReturnedTask[3];
 
     // configure gpio pins
@@ -30,7 +28,8 @@ void app_main(void)
     ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins_i2s));
     ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
-    // parse_config_file();
+    // init_config_file(&configurations);
+    // parse_config_file(&host, &card, &configurations);
 
     // create semaphores/event groups
     xEvents           = xEventGroupCreate();
