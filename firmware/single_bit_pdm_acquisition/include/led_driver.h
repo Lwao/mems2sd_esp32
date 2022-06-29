@@ -43,16 +43,33 @@
 
 #define LDC_SPEED_MODE LEDC_LOW_SPEED_MODE
 #define LDC_TIMER LEDC_TIMER_0
-#define LDC_DUTY_RESOLUTION LEDC_TIMER_13_BIT
+#define LDC_DUTY_RESOLUTION LEDC_TIMER_12_BIT
 #define LDC_FREQUENCY 5000
 #define NUM_LDC 3
 
-
-#define TIMER_EXPIRATION 5000
+#define LED_STD_LEVEL 0xFC0
+#define LED_OFF_LEVEL 0xFFFF
 
 #define BIT_(shift) (1<<shift)
-#define COMPUTE_DUTY_RES(duty, res) (uint32_t)((float)pow(2,res)*(float)duty/(float)(100)-1)
 
-void init_led();
+// flags to access led color
+typedef enum {RED_COLOR, GREEN_COLOR, BLUE_COLOR, MAGENTA_COLOR, YELLOW_COLOR, CYAN_COLOR, WHITE_COLOR, OFF_COLOR} colors_t;
+typedef enum {RED_CH, GREEN_CH, BLUE_CH} led_channel_t;
+
+/**
+ * @brief Change color of current attached to LDC peripheral RGB LED.
+ * 
+ * According to which stage of the firmware is running, the RGB LED should assume the following colors:
+ *  - Setup: white;
+ *  - IDLE mode: blue;
+ *  - Start recording: green;
+ *  - End recodring: red;
+ *  - Recording: off;
+ * 
+ * @param ledc_channel array of ledc channels containing all colors channels.
+ * @param ledc_time ledc timer.
+ * @param color color to which be turned on in the RGB LED.
+ */
+void change_color(ledc_channel_config_t (*ledc_channel)[NUM_LDC], ledc_timer_config_t *ledc_timer, colors_t color);
 
 #endif // _LED_DRIVER_H_

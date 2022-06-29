@@ -8,62 +8,62 @@
 
 #include "led_driver.h"
 
-void init_led()
+void change_color(ledc_channel_config_t (*ledc_channel)[NUM_LDC], ledc_timer_config_t *ledc_timer, colors_t color)
 {
-    // Prepare and then apply the LEDC PWM timer configuration
-    ledc_timer_config_t ledc_timer = {
-        .speed_mode       = LDC_SPEED_MODE,
-        .timer_num        = LDC_TIMER,
-        .duty_resolution  = LDC_DUTY_RESOLUTION ,
-        .freq_hz          = LDC_FREQUENCY, 
-        .clk_cfg          = LEDC_AUTO_CLK
-    };
-
-
-    // Prepare and then apply the LEDC PWM channel configuration
-    ledc_channel_config_t ledc_channel[NUM_LDC] = {
-        { // red
-        .speed_mode     = LDC_SPEED_MODE,
-        .channel        = LEDC_CHANNEL_RED,
-        .timer_sel      = LDC_TIMER,
-        .intr_type      = LEDC_INTR_DISABLE,
-        .gpio_num       = LEDC_GPIO_OUT_RED,
-        .duty           = 0, 
-        .hpoint         = 0
-        },
-        { // green
-        .speed_mode     = LDC_SPEED_MODE,
-        .channel        = LEDC_CHANNEL_GREEN,
-        .timer_sel      = LDC_TIMER,
-        .intr_type      = LEDC_INTR_DISABLE,
-        .gpio_num       = LEDC_GPIO_OUT_GREEN,
-        .duty           = 0, 
-        .hpoint         = 0
-        },
-        { // blue
-        .speed_mode     = LDC_SPEED_MODE,
-        .channel        = LEDC_CHANNEL_BLUE,
-        .timer_sel      = LDC_TIMER,
-        .intr_type      = LEDC_INTR_DISABLE,
-        .gpio_num       = LEDC_GPIO_OUT_BLUE,
-        .duty           = 0, 
-        .hpoint         = 0
-        }
-    };
-    float fixed_duty_cycle[3] = {90, 25, 5};
-
-    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-    for (int ch=0; ch<NUM_LDC; ch++) ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel[ch]));
-
-    //ledc_set_freq(LEDC_MODE, LEDC_TIMER, 2500);
-    for (int ch=0; ch<NUM_LDC; ch++) 
+    // set duty cycle according to color
+    switch(color)
     {
-        ESP_ERROR_CHECK(ledc_set_duty(ledc_channel[ch].speed_mode, 
-                                    ledc_channel[ch].channel, 
-                                    COMPUTE_DUTY_RES(fixed_duty_cycle[ch], ledc_timer.duty_resolution)));
-        ESP_ERROR_CHECK(ledc_update_duty(ledc_channel[ch].speed_mode, 
-                                        ledc_channel[ch].channel));
+        case RED_COLOR:
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[RED_CH].speed_mode, (*ledc_channel)[RED_CH].channel, LED_STD_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[GREEN_CH].speed_mode, (*ledc_channel)[GREEN_CH].channel, LED_OFF_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_OFF_LEVEL));
+            break;
+
+        case GREEN_COLOR:
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[RED_CH].speed_mode, (*ledc_channel)[RED_CH].channel, LED_OFF_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[GREEN_CH].speed_mode, (*ledc_channel)[GREEN_CH].channel, LED_STD_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_OFF_LEVEL));
+            break;
+
+        case BLUE_COLOR:
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[RED_CH].speed_mode, (*ledc_channel)[RED_CH].channel, LED_OFF_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[GREEN_CH].speed_mode, (*ledc_channel)[GREEN_CH].channel, LED_OFF_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_STD_LEVEL));
+            break;
+
+        case MAGENTA_COLOR:
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[RED_CH].speed_mode, (*ledc_channel)[RED_CH].channel, LED_STD_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[GREEN_CH].speed_mode, (*ledc_channel)[GREEN_CH].channel, LED_OFF_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_STD_LEVEL));
+            break;
+
+        case YELLOW_COLOR:
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[RED_CH].speed_mode, (*ledc_channel)[RED_CH].channel, LED_STD_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[GREEN_CH].speed_mode, (*ledc_channel)[GREEN_CH].channel, LED_STD_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_OFF_LEVEL));
+            break;
+
+        case CYAN_COLOR:
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[RED_CH].speed_mode, (*ledc_channel)[RED_CH].channel, LED_OFF_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[GREEN_CH].speed_mode, (*ledc_channel)[GREEN_CH].channel, LED_STD_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_STD_LEVEL));
+            break;
+
+        case WHITE_COLOR:
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[RED_CH].speed_mode, (*ledc_channel)[RED_CH].channel, LED_STD_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[GREEN_CH].speed_mode, (*ledc_channel)[GREEN_CH].channel, LED_STD_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_STD_LEVEL));
+            break;
+
+        default:
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[RED_CH].speed_mode, (*ledc_channel)[RED_CH].channel, LED_OFF_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[GREEN_CH].speed_mode, (*ledc_channel)[GREEN_CH].channel, LED_OFF_LEVEL));
+            ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_OFF_LEVEL));
+            break;
     }
+
+    // update duty cycle
+    for(int ch=0; ch<NUM_LDC; ch++) ESP_ERROR_CHECK(ledc_update_duty((*ledc_channel)[ch].speed_mode, (*ledc_channel)[ch].channel));
 }
 
 

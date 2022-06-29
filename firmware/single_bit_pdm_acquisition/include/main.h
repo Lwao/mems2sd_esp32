@@ -100,19 +100,6 @@
  * Definition of macros to be used globally in the code
  */
 
-/* Sample rate
-0  -> 16kHz   = 16000; 
-1  -> 32kHz   = 32000;
-2  -> 44.1kHz = 44100; 
-3  -> 96kHz   = 96000;
-4  -> 112kHz  = 112000;
-5  -> 128kHz  = 128000;
-6  -> 144kHz  = 144000;
-7  -> 160kHz  = 160000;
-8  -> 176kHz  = 176000;
-9  -> 192kHz  = 192000;
-10 -> 250kHz  = 250000;
-*/
 #define SAMPLE_RATE_PDM2PCM 44100
 #define SAMPLE_RATE_PDM 78125 // 75000->4.8MHz, 31250->2MHz, 62500->4MHz, 55kHz->3.52MHz 
 #define SAMPLE_RATE SAMPLE_RATE_PDM
@@ -120,12 +107,6 @@
 // gpio
 #define GPIO_INPUT_PIN_SEL1   (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
 #define ESP_INTR_FLAG_DEFAULT 0
-
-// sd card
-#define MOUNT_POINT "/sdcard" // SD card mounting directory
-#define SPI_DMA_CHAN 1        // DMA channel to be used by the SPI peripheral
-
-// #define CONFIG_FREERTOS_HZ 100
 
 // pins
 #define MIC_CLOCK_PIN  GPIO_NUM_21  // gpio 21 - MEMS MIC clock in
@@ -141,7 +122,7 @@
 #define DATA_BUFFER_SIZE DMA_BUF_LEN_SMPL*BIT_DEPTH/8
 
 // freetros
-#define configTICK_RATE_HZ 1000
+// #define configTICK_RATE_HZ 1000
 
 // log flags
 #define INIT_SPI_TAG   "init_spi"
@@ -158,8 +139,8 @@
 
 #define BIT_(shift) (1<<shift)
 
-enum events{REC_STARTED,   // flag informing that the recording session already started
-            SPI_BUS_FREE}; // flag indicating if there are devices attached to SPI bus or not
+typedef enum {REC_STARTED,           // flag informing that the recording session already started
+             SPI_BUS_FREE} events_t; // flag indicating if there are devices attached to SPI bus or not
 
 /*
  * Global variable declaration section
@@ -208,7 +189,6 @@ i2s_config_t i2s_config_i2s = {
     .dma_buf_len = DMA_BUF_LEN_SMPL,                      // size of each buffer, 1024 max.
     .use_apll = 0,//I2S_CLK_APLL,                             // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,             // interrupt level 1
-    //.fixed_mclk = 0
 };
 
 // i2s pin config
@@ -219,6 +199,47 @@ i2s_pin_config_t i2s_pins_i2s = {
     .data_in_num = MIC_DATA_PIN         // data in pin
 };
 
+// Prepare and then apply the LEDC PWM timer configuration
+ledc_timer_config_t ledc_timer = {
+    .speed_mode       = LDC_SPEED_MODE,
+    .timer_num        = LDC_TIMER,
+    .duty_resolution  = LDC_DUTY_RESOLUTION ,
+    .freq_hz          = LDC_FREQUENCY, 
+    .clk_cfg          = LEDC_AUTO_CLK
+};
+
+
+// Prepare and then apply the LEDC PWM channel configuration
+ledc_channel_config_t ledc_channel[NUM_LDC] = {
+    { // red
+    .speed_mode     = LDC_SPEED_MODE,
+    .channel        = LEDC_CHANNEL_RED,
+    .timer_sel      = LDC_TIMER,
+    .intr_type      = LEDC_INTR_DISABLE,
+    .gpio_num       = LEDC_GPIO_OUT_RED,
+    .duty           = 0, 
+    .hpoint         = 0
+    },
+    { // green
+    .speed_mode     = LDC_SPEED_MODE,
+    .channel        = LEDC_CHANNEL_GREEN,
+    .timer_sel      = LDC_TIMER,
+    .intr_type      = LEDC_INTR_DISABLE,
+    .gpio_num       = LEDC_GPIO_OUT_GREEN,
+    .duty           = 0, 
+    .hpoint         = 0
+    },
+    { // blue
+    .speed_mode     = LDC_SPEED_MODE,
+    .channel        = LEDC_CHANNEL_BLUE,
+    .timer_sel      = LDC_TIMER,
+    .intr_type      = LEDC_INTR_DISABLE,
+    .gpio_num       = LEDC_GPIO_OUT_BLUE,
+    .duty           = 0, 
+    .hpoint         = 0
+    }
+};
+
 size_t bytes_read; // number of bytes read by i2s_read
 long dataBuffer[DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
 
@@ -227,8 +248,8 @@ sdmmc_card_t* card;
 sdmmc_host_t host;
 FILE* session_file = NULL;
 
-const char mount_point[] = MOUNT_POINT; // sd card mounting point
-const char* fname = "rec.wav"; // standard session file name
+char mount_point[] = MOUNT_POINT; // sd card mounting point
+char *fname;
 
 // freertos variables
 TaskHandle_t xTaskRECHandle;   // get data from mic and save into sd card [task_handle]
@@ -240,7 +261,9 @@ EventGroupHandle_t xEvents;          // event group to handle event flags [event
 SemaphoreHandle_t xMutex;            // mutex to allow end of recording only when the spi interface finishes to write into sd card [sempaphore_handle]
 SemaphoreHandle_t xSemaphoreBTN_ON;  // semaphore to interpret button as start button interrupt [semaphore_handle]
 SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button interrupt [semaphore_handle]
-SemaphoreHandle_t xSemaphoreTimer;   // semaphore to interpret timer got interrupt [semaphore_handle]
+TimerHandle_t xTimerInSession, xTimerOutSession; // software timer to count in-session and out-session time [timer_handle]
+
+portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
 struct timeval date = {// struct with date data
     .tv_sec = 0, // current date in seconds (to be fecthed from NTP)
@@ -256,23 +279,23 @@ wav_header_t wav_header;
  */
 
 /**
- * @brief Task to acquire and save audio data into SD card
+ * @brief Task to acquire and save audio data into SD card.
  *
- * @param pvParameters freeRTOS task parameters
+ * @param pvParameters freeRTOS task parameters.
  */
 void vTaskREC(void * pvParameters);
 
 /**
- * @brief Task to configure START of recording when receives command to it
+ * @brief Task to configure START of recording when receives command to it.
  *
- * @param pvParameters freeRTOS task parameters
+ * @param pvParameters freeRTOS task parameters.
  */
 void vTaskSTART(void * pvParameters);
 
 /**
- * @brief Task to configure END of recording when receives command to it
+ * @brief Task to configure END of recording when receives command to it.
  *
- * @param pvParameters freeRTOS task parameters
+ * @param pvParameters freeRTOS task parameters.
  */
 void vTaskEND(void * pvParameters);
 
@@ -280,5 +303,15 @@ void vTaskEND(void * pvParameters);
  * @brief Interrupt service routine for button pressed (associated with BOOT button a.k.a GPIO0)
  */
 static void IRAM_ATTR ISR_BTN();
+
+/**
+ * @brief Timer callback to stop recording. 
+ */
+static void vTimerInSessionCbck();
+
+/**
+ * @brief Timer callback to start recording. 
+ */
+static void vTimerOutSessionCbck();
 
 #endif //_MAIN_H_

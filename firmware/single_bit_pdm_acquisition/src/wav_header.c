@@ -52,7 +52,7 @@ void init_wav_header(FILE **file, wav_header_t *wav_header, long sample_rate, lo
     fsync(fileno(*file)); // secure data writing
 }
 
-void finish_wav_header(FILE **file, wav_header_t *wav_header, const char* fname)
+void finish_wav_header(FILE **file, wav_header_t *wav_header, char* fname)
 {
     char text[128];
     // finish .wav file format structure

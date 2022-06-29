@@ -10,34 +10,48 @@
 
 void app_main()
 {
+    vTaskDelay(100);
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
     for (int ch=0; ch<NUM_LDC; ch++) ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel[ch]));
 
-    //ledc_set_freq(LEDC_MODE, LEDC_TIMER, 2500);
-    for (int ch=0; ch<NUM_LDC; ch++) 
-    {
-        ESP_ERROR_CHECK(ledc_set_duty(ledc_channel[ch].speed_mode, 
-                                    ledc_channel[ch].channel, 
-                                    COMPUTE_DUTY_RES(fixed_duty_cycle[ch], ledc_timer.duty_resolution)));
-        ESP_ERROR_CHECK(ledc_update_duty(ledc_channel[ch].speed_mode, 
-                                        ledc_channel[ch].channel));
-    }
+    int ch;
+
+    ch=0;
+    ESP_ERROR_CHECK(ledc_set_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel, LED_STD_LEVEL));
+    ESP_ERROR_CHECK(ledc_update_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel));
+
+    ch=1;
+    ESP_ERROR_CHECK(ledc_set_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel, LED_STD_LEVEL));
+    ESP_ERROR_CHECK(ledc_update_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel));
+
+    ch=2;
+    ESP_ERROR_CHECK(ledc_set_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel, LED_STD_LEVEL));
+    ESP_ERROR_CHECK(ledc_update_duty(ledc_channel[ch].speed_mode, ledc_channel[ch].channel));
     
 
-    xEvents = xEventGroupCreate();
-    xTimer  = xTimerCreate("Timer",pdMS_TO_TICKS(TIMER_EXPIRATION),pdTRUE,(void*)0,vTimerCbck);
-
-    xTaskCreatePinnedToCore(vTaskUpdateColor, 
-                            "TASK_UPDATE_COLOR",   
-                            configMINIMAL_STACK_SIZE+1024, 
-                            NULL, 
-                            configMAX_PRIORITIES-1, 
-                            &xTaskUpdateColor, 
-                            PRO_CPU_NUM);
-
-    xTimerStart(xTimer,0);
+    // for (int ch=0; ch<NUM_LDC; ch++) 
+    // {
+    //     ESP_ERROR_CHECK(ledc_set_duty(ledc_channel[ch].speed_mode, 
+    //                                 ledc_channel[ch].channel, 
+    //                                 LED_LOW_LEVEL));
+    //     ESP_ERROR_CHECK(ledc_update_duty(ledc_channel[ch].speed_mode, 
+    //                                     ledc_channel[ch].channel));
+    // }
     
-    vTaskDelete(NULL);
+    // xEvents = xEventGroupCreate();
+    // xTimer  = xTimerCreate("Timer",pdMS_TO_TICKS(TIMER_EXPIRATION),pdTRUE,(void*)0,vTimerCbck);
+
+    // xTaskCreatePinnedToCore(vTaskUpdateColor, 
+    //                         "TASK_UPDATE_COLOR",   
+    //                         configMINIMAL_STACK_SIZE+1024, 
+    //                         NULL, 
+    //                         configMAX_PRIORITIES-1, 
+    //                         &xTaskUpdateColor, 
+    //                         PRO_CPU_NUM);
+
+    // xTimerStart(xTimer,0);
+    
+    // vTaskDelete(NULL);
 }
 
 

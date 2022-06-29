@@ -18,6 +18,11 @@ void app_main(void)
 {  
     BaseType_t xReturnedTask[3];
 
+    // configure ldc
+    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
+    for (int ch=0; ch<NUM_LDC; ch++) ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel[ch]));
+    change_color(&ledc_channel, &ledc_timer, WHITE_COLOR);
+
     // configure gpio pins
     ESP_ERROR_CHECK(gpio_config(&in_conf1));                              // initialize input pin 1 configuration - on/off button
     ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT));     // install gpio isr service
@@ -28,25 +33,55 @@ void app_main(void)
     ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins_i2s));
     ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
-    // init_config_file(&configurations);
-    // parse_config_file(&host, &card, &configurations);
+    // parse configuration file from SD card
+    parse_config_file(&host, &card, &configurations);
 
     // create semaphores/event groups
     xEvents           = xEventGroupCreate();
     xMutex            = xSemaphoreCreateMutex();
     xSemaphoreBTN_ON  = xSemaphoreCreateBinary();
     xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
-    
+
+    if(configurations.record_session_duration>0)
+    {
+        xTimerInSession = xTimerCreate("TimerInSession", 
+                                        pdMS_TO_TICKS(configurations.record_session_duration*1000),
+                                        pdFALSE, 
+                                        (void*)0, 
+                                        vTimerInSessionCbck);
+        xTimerStop(xTimerInSession,0);
+        if(xTimerInSession == NULL){ // tests if timer creation fails
+            ESP_LOGE(SETUP_APP_TAG, "Failed to create in session timer.");
+            while(1);
+        }
+        ESP_LOGI(SETUP_APP_TAG, "Record session duration will be timed.");
+    }
+
+    if(configurations.interval_between_record_session>0)
+    {
+        xTimerOutSession = xTimerCreate("TimerOutSession", 
+                                        pdMS_TO_TICKS(configurations.interval_between_record_session*1000), 
+                                        pdFALSE, 
+                                        (void*)0, 
+                                        vTimerOutSessionCbck);
+        xTimerStop(xTimerOutSession,0);
+        if(xTimerOutSession == NULL){ // tests if timer creation fails
+            ESP_LOGE(SETUP_APP_TAG, "Failed to create out session timer.");
+            while(1);
+        }
+        ESP_LOGI(SETUP_APP_TAG, "Interval between record session will be timed.");
+    }
+
     if(xQueueData == NULL){ // tests if queue creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.\n");
+        ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.");
         while(1);
     }
     if(xEvents == NULL){ // tests if event group creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create event group.\n");
+        ESP_LOGE(SETUP_APP_TAG, "Failed to create event group.");
         while(1);
     }
     if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xMutex == NULL)){ // tests if semaphore creation fails
-        ESP_LOGE(SETUP_APP_TAG, "Failed to create semaphores.\n");
+        ESP_LOGE(SETUP_APP_TAG, "Failed to create semaphores.");
         while(1);
     }  
 
@@ -61,7 +96,7 @@ void app_main(void)
     for(int itr=0; itr<3; itr++) // iterate over tasks 
     {
         if(xReturnedTask[itr] == pdFAIL){ // tests if task creation fails
-            ESP_LOGE(SETUP_APP_TAG, "Failed to create task %d.\n", itr);
+            ESP_LOGE(SETUP_APP_TAG, "Failed to create task %d.", itr);
             while(1);
         }
     }
@@ -69,9 +104,18 @@ void app_main(void)
     // suspend tasks for recording mode
     vTaskSuspend(xTaskRECHandle);
     vTaskSuspend(xTaskENDhandle);
-    // vTaskSuspend(xTaskSTARThandle);
 
     ESP_LOGI(SETUP_APP_TAG, "Successful BOOT!");
+
+    // start out session timer to time-in when to start recording
+    if(configurations.interval_between_record_session>0) 
+    {
+        xTimerReset(xTimerOutSession,0); 
+        xTimerStart(xTimerOutSession,0); 
+    }
+
+    change_color(&ledc_channel, &ledc_timer, BLUE_COLOR);
+
     vTaskDelete(NULL);
 }
 
@@ -88,8 +132,10 @@ void vTaskSTART(void * pvParameters)
     {
         if(xSemaphoreBTN_ON!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn ON recording
         {
-            ESP_LOGI(START_REC_TAG, "Starting record session.");
+            change_color(&ledc_channel, &ledc_timer, GREEN_COLOR);
 
+            ESP_LOGI(START_REC_TAG, "Starting record session.");
+            
             // initialize SPI bus and mount SD card
             while(initialize_spi_bus(&host)!=1){vTaskDelay(100);}
             while(initialize_sd_card(&host, &card)!=1){vTaskDelay(100);}
@@ -99,7 +145,7 @@ void vTaskSTART(void * pvParameters)
             settimeofday(&date, NULL); // update time
             
             // open new file in append mode
-            while(session_file==NULL) session_file = open_file(fname, "a");
+            while(session_file==NULL) session_file = open_file(configurations.file_name, "a");
 
             // write first part of .wav header
             init_wav_header(&session_file, &wav_header, SAMPLE_RATE, BIT_DEPTH);
@@ -113,6 +159,15 @@ void vTaskSTART(void * pvParameters)
             i2s_set_sample_rates(I2S_PORT_NUM, SAMPLE_RATE); // change mic to ultrasonic mode
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
+
+            // start in session timer to time-in when to stop recording
+            if(configurations.record_session_duration>0) 
+            {
+                xTimerReset(xTimerInSession,0); 
+                xTimerStart(xTimerInSession,0); 
+            }
+            
+            change_color(&ledc_channel, &ledc_timer, OFF_COLOR);
 
             // resume tasks for recording mode
             vTaskResume(xTaskRECHandle);
@@ -131,6 +186,8 @@ void vTaskEND(void * pvParameters)
     {
         if(xSemaphoreBTN_OFF!=NULL && xSemaphoreTakeFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken)==pdTRUE) // button was pressed to turn OFF recording
         {
+            change_color(&ledc_channel, &ledc_timer, RED_COLOR);
+
             ESP_LOGI(END_REC_TAG, "Stoping recording...");
 
             // i2s stop
@@ -145,10 +202,13 @@ void vTaskEND(void * pvParameters)
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
             // finish to write the .wav header by extracting size of payload
-            finish_wav_header(&session_file, &wav_header, fname);
+            finish_wav_header(&session_file, &wav_header, configurations.file_name);
 
             // close file in use
             close_file(&session_file);
+
+            // engage next file name
+            get_file_name(&configurations);
             
             // dismount SD card and free SPI bus (in the given order) 
             deinitialize_sd_card(&card);
@@ -163,6 +223,15 @@ void vTaskEND(void * pvParameters)
             ESP_LOGI(END_REC_TAG, "Returning to IDLE mode.");
 
             xSemaphoreGive(xMutex);
+
+            // start out session timer to time-in when to start recording
+            if(configurations.interval_between_record_session>0) 
+            {
+                xTimerReset(xTimerOutSession,0); 
+                xTimerStart(xTimerOutSession,0); 
+            }
+
+            change_color(&ledc_channel, &ledc_timer, BLUE_COLOR);
 
             // locking task
             vTaskSuspend(xTaskENDhandle); // suspend actual task
@@ -206,5 +275,23 @@ static void IRAM_ATTR ISR_BTN()
     BaseType_t xHighPriorityTaskWoken = pdFALSE;
     if(xEventGroupGetBitsFromISR(xEvents) & BIT_(REC_STARTED)){xSemaphoreGiveFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken);} // recording started, so stop recording
     else{xSemaphoreGiveFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken);} // recording stopd, so start recording
+    portYIELD_FROM_ISR(xHighPriorityTaskWoken);
+}
+
+static void vTimerInSessionCbck()
+{ 
+    BaseType_t xHighPriorityTaskWoken = pdFALSE;
+    if((xEventGroupGetBitsFromISR(xEvents) & BIT_(REC_STARTED)))      // recording is started
+    xSemaphoreGiveFromISR(xSemaphoreBTN_OFF,&xHighPriorityTaskWoken); // so stop recording
+    xTimerStop(xTimerInSession,0); 
+    portYIELD_FROM_ISR(xHighPriorityTaskWoken);
+}
+
+static void vTimerOutSessionCbck()
+{
+    BaseType_t xHighPriorityTaskWoken = pdFALSE;
+    if(!(xEventGroupGetBitsFromISR(xEvents) & BIT_(REC_STARTED)))    // recording is stopped, 
+    xSemaphoreGiveFromISR(xSemaphoreBTN_ON,&xHighPriorityTaskWoken); // so start recording
+    xTimerStop(xTimerOutSession,0); 
     portYIELD_FROM_ISR(xHighPriorityTaskWoken);
 }

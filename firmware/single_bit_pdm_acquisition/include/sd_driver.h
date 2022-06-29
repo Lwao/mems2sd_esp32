@@ -69,7 +69,7 @@
  *
  * @return merged filename
  */
-char* merge_filename(const char *filename);
+char* merge_filename(char *filename);
 
 /**
  * @brief Read the counter value of hardware timer, in unit of a given scale.
@@ -79,7 +79,7 @@ char* merge_filename(const char *filename);
  *
  * @return pointer to a open file
  */
-FILE* open_file(const char *filename, char *mode);
+FILE* open_file(char *filename, char *mode);
 
 /**
  * @brief Close file when there is no use to it.
@@ -94,7 +94,7 @@ void close_file(FILE **file);
  * @param actualfname actual filename 
  * @param targetfname target filename name that will substitute de previous  
  */
-void rename_file(const char *actualfname, const char *targetfname);
+void rename_file(char *actualfname, char *targetfname);
 
 /**
  * @brief Initialize SPI bus

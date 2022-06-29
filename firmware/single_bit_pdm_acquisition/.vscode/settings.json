@@ -11,6 +11,7 @@
         "queue.h": "c",
         "cmath": "cpp",
         "wav_header.h": "c",
-        "esp_err.h": "c"
+        "esp_err.h": "c",
+        "led_driver.h": "c"
     }
 }

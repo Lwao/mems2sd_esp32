@@ -38,11 +38,32 @@ typedef struct
 {
     int record_file_name_sufix;
     int sampling_rate;
+    int bit_depth;
     int record_session_duration;
-    char file_name[256];
+    int interval_between_record_session;
+    char* file_name;
 } config_file_t;
 
+/**
+ * @brief Initialize config file structure with default data.
+ * 
+ * @param configurations config file structure to be manipulated.
+ */
 void init_config_file(config_file_t *configurations);
+
+/**
+ * @brief Initialize config file structure with default data.
+ * 
+ * @param host pointer to SPI bus host
+ * @param card pointer to SD card host
+ * @param configurations config file structure to be manipulated.
+ */
 void parse_config_file(sdmmc_host_t* host, sdmmc_card_t** card, config_file_t *configurations);
 
+/**
+ * @brief Get file name based in the SD card file system current existing file to prevent overwriting.
+ * 
+ * @param configurations config file structure to be manipulated.
+ */
+void get_file_name(config_file_t *configurations);
 #endif // _CONFIG_FILE_H_

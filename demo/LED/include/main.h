@@ -34,15 +34,16 @@
 
 #define LDC_SPEED_MODE LEDC_LOW_SPEED_MODE
 #define LDC_TIMER LEDC_TIMER_0
-#define LDC_DUTY_RESOLUTION LEDC_TIMER_13_BIT
+#define LDC_DUTY_RESOLUTION LEDC_TIMER_12_BIT
 #define LDC_FREQUENCY 5000
 #define NUM_LDC 3
 
+#define LED_STD_LEVEL 0xFC0
+#define LED_OFF_LEVEL 0xFFFF
 
 #define TIMER_EXPIRATION 5000
 
 #define BIT_(shift) (1<<shift)
-#define COMPUTE_DUTY_RES(duty, res) (uint32_t)((float)pow(2,res)*(float)duty/(float)(100)-1)
 
 
 // Prepare and then apply the LEDC PWM timer configuration
@@ -92,8 +93,6 @@ enum events{UPDATE_COLOR};
 TaskHandle_t xTaskUpdateColor;
 TimerHandle_t xTimer;
 EventGroupHandle_t xEvents;
-
-float fixed_duty_cycle[3] = {90, 25, 5};
 
 /**
  * @brief Task to update RGB LED color

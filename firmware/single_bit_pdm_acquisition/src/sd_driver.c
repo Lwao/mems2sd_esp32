@@ -45,10 +45,10 @@
  * Define early prototyped functions execution code
  */
 
-char* merge_filename(const char *filename)
+char* merge_filename(char *filename)
 {
-    const char* bar = "/";
-    const char* fileformat = "";
+    char* bar = "/";
+    char* fileformat = "";
     char *name = malloc(strlen(MOUNT_POINT)+strlen(bar)+strlen(filename)+strlen(fileformat));
     strcpy(name, MOUNT_POINT);
     strcat(name, bar); 
@@ -57,7 +57,7 @@ char* merge_filename(const char *filename)
     return name;
 }
 
-FILE* open_file(const char *filename, char *mode)
+FILE* open_file(char *filename, char *mode)
 {
     FILE* f;
     
@@ -66,14 +66,14 @@ FILE* open_file(const char *filename, char *mode)
         char * name = merge_filename(filename);        
 
         // Open file
-        ESP_LOGI(SD_DRIVER_TAG, "Opening file.");
+        ESP_LOGD(SD_DRIVER_TAG, "Opening file.");
         f = fopen(name, mode);
         free(name);
         if (f == NULL) {
-            ESP_LOGE(SD_DRIVER_TAG, "Failed to open file.");
+            ESP_LOGD(SD_DRIVER_TAG, "Failed to open file.");
             return NULL;
         }
-        ESP_LOGI(SD_DRIVER_TAG, "File opened.");
+        ESP_LOGD(SD_DRIVER_TAG, "File opened.");
         return f;
     } else 
     {
@@ -88,11 +88,11 @@ void close_file(FILE **file)
         fclose(*file);
         *file = NULL;
     }
-    ESP_LOGI(SD_DRIVER_TAG, "File closed.");
+    ESP_LOGD(SD_DRIVER_TAG, "File closed.");
     return;
 }
 
-void rename_file(const char *actualfname, const char *targetfname)
+void rename_file(char *actualfname, char *targetfname)
 {
     char * actualName = merge_filename(actualfname); 
     char * targetName = merge_filename(targetfname); 
@@ -105,7 +105,7 @@ void rename_file(const char *actualfname, const char *targetfname)
     // Rename original file
     ESP_LOGI(SD_DRIVER_TAG, "Renaming file.");
     if (rename(targetName, actualName) != 0) {
-        ESP_LOGE(SD_DRIVER_TAG, "Rename failed.");
+        ESP_LOGD(SD_DRIVER_TAG, "Rename failed.");
         free(targetName);
         free(actualName);
         return;

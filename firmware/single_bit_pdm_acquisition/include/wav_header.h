@@ -49,19 +49,34 @@ typedef struct {
 /**
  * @brief Byte swap to compensate reversed endianness of ESP32 I2S peripheral (short).
  * 
- * @param s short integer to revert
+ * @param s short integer to revert.
  */
 void swap_byte_order_short(short* s);
 
 /**
  * @brief Byte swap to compensate reversed endianness of ESP32 I2S peripheral (long).
  * 
- * @param l long integer to revert
+ * @param l long integer to revert.
  */
 void swap_byte_order_long(long* l);
 
+/**
+ * @brief Initialize .wav file header.
+ * 
+ * @param file file to which initialize header.
+ * @param wav_header .wav header structure with standard data.
+ * @param sample_rate sample rate used in the recording.
+ * @param bit_depth bit depth used for samples in recording.
+ */
 void init_wav_header(FILE **file, wav_header_t *wav_header, long sample_rate, long bit_depth);
 
-void finish_wav_header(FILE **file, wav_header_t *wav_header, const char* fname);
+/**
+ * @brief Finish .wav file header.
+ * 
+ * @param file file to which finish header.
+ * @param wav_header .wav header structure with standard data.
+ * @param fname name of file to be manipulated.
+ */
+void finish_wav_header(FILE **file, wav_header_t *wav_header, char* fname);
 
 #endif // _WAV_HEADER_H_ 
