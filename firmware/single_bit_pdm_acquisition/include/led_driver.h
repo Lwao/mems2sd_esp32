@@ -63,7 +63,7 @@ typedef enum {RED_CH, GREEN_CH, BLUE_CH} led_channel_t;
  *  - Setup: white;
  *  - IDLE mode: blue;
  *  - Start recording: green;
- *  - End recodring: red;
+ *  - End recording: red;
  *  - Recording: off;
  * 
  * @param ledc_channel array of ledc channels containing all colors channels.
