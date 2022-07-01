@@ -167,7 +167,7 @@ void vTaskSTART(void * pvParameters)
                 xTimerStart(xTimerInSession,0); 
             }
             
-            change_color(&ledc_channel, &ledc_timer, OFF_COLOR);
+            change_color(&ledc_channel, &ledc_timer, configurations.recording_color);
 
             // resume tasks for recording mode
             vTaskResume(xTaskRECHandle);

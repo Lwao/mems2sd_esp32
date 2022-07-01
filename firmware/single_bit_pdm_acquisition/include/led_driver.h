@@ -53,7 +53,7 @@
 #define BIT_(shift) (1<<shift)
 
 // flags to access led color
-typedef enum {RED_COLOR, GREEN_COLOR, BLUE_COLOR, MAGENTA_COLOR, YELLOW_COLOR, CYAN_COLOR, WHITE_COLOR, OFF_COLOR} colors_t;
+typedef enum {OFF_COLOR=0, RED_COLOR, GREEN_COLOR, BLUE_COLOR, MAGENTA_COLOR, YELLOW_COLOR, CYAN_COLOR, WHITE_COLOR} colors_t;
 typedef enum {RED_CH, GREEN_CH, BLUE_CH} led_channel_t;
 
 /**

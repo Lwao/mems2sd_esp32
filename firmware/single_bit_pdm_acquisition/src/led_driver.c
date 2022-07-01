@@ -55,7 +55,7 @@ void change_color(ledc_channel_config_t (*ledc_channel)[NUM_LDC], ledc_timer_con
             ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_STD_LEVEL));
             break;
 
-        default:
+        default: // OFF_COLOR
             ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[RED_CH].speed_mode, (*ledc_channel)[RED_CH].channel, LED_OFF_LEVEL));
             ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[GREEN_CH].speed_mode, (*ledc_channel)[GREEN_CH].channel, LED_OFF_LEVEL));
             ESP_ERROR_CHECK(ledc_set_duty((*ledc_channel)[BLUE_CH].speed_mode, (*ledc_channel)[BLUE_CH].channel, LED_OFF_LEVEL));

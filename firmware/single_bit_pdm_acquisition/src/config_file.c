@@ -15,6 +15,7 @@ void init_config_file(config_file_t *configurations)
     configurations->bit_depth = 16;
 	configurations->record_session_duration = -1;
     configurations->interval_between_record_session = -1;
+    configurations->recording_color = OFF_COLOR;
     configurations->file_name = (char*) malloc(256 * sizeof(char));
     // if(asprintf(&(*configurations).file_name, "rec%d.wav",  configurations->record_file_name_sufix)==-1)
     // ESP_LOGE(PARSE_CONFIG_TAG, "Error initializing test session file name.");
@@ -50,6 +51,7 @@ void parse_config_file(sdmmc_host_t* host, sdmmc_card_t** card, config_file_t *c
             if(strcmp(token_name, "bit_depth")==0) configurations->bit_depth = token_value;
             if(strcmp(token_name, "record_session_duration")==0) configurations->record_session_duration = token_value;
             if(strcmp(token_name, "interval_between_record_session")==0) configurations->interval_between_record_session = token_value;
+            if(strcmp(token_name, "recording_color")==0) configurations->recording_color = (colors_t)token_value;
         }
     }
     ESP_LOGI(PARSE_CONFIG_TAG, "Config file parsed.");
@@ -63,6 +65,7 @@ void parse_config_file(sdmmc_host_t* host, sdmmc_card_t** card, config_file_t *c
     ESP_LOGI(PARSE_CONFIG_TAG, "Bit depth: %d-bits", configurations->bit_depth);
     ESP_LOGI(PARSE_CONFIG_TAG, "Record session duration: %ds", configurations->record_session_duration);
     ESP_LOGI(PARSE_CONFIG_TAG, "Interval between record session: %ds", configurations->interval_between_record_session);
+    ESP_LOGI(PARSE_CONFIG_TAG, "Recording color: %d", configurations->recording_color);
 
     // dismount SD card and free SPI bus (in the given order) 
     deinitialize_sd_card(card);

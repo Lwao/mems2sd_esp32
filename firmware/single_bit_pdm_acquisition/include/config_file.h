@@ -31,6 +31,7 @@
 #include "freertos/task.h"
 
 #include "sd_driver.h"
+#include "led_driver.h"
 
 #define PARSE_CONFIG_TAG  "parse_config"
 
@@ -41,6 +42,7 @@ typedef struct
     int bit_depth;
     int record_session_duration;
     int interval_between_record_session;
+    colors_t recording_color;
     char* file_name;
 } config_file_t;
 
