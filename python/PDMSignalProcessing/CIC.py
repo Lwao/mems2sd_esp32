@@ -80,5 +80,6 @@ class CIC:
                     acc = self.comb_stages[c].process(acc)
                 # data_out.append(acc/self.gain)
                 data_out.append(acc)
+            # data_out.append(acc)
         
         return data_out

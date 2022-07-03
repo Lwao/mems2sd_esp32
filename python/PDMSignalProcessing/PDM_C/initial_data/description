@@ -1,0 +1,4 @@
+data_in: binary data
+data_bit: bit data in 1/-1 array format
+data_pcm: data_bit stream processed in C
+data_cic_processed: data_bit stream processed in Python

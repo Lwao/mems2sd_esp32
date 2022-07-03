@@ -28,6 +28,7 @@
 #include "led_driver.h"
 #include "wav_header.h"
 #include "config_file.h"
+#include "pdm2pcm.h"
 
 #ifndef C_POSIX_LIB_INCLUDED
     #define C_POSIX_LIB_INCLUDED
