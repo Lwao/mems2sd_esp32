@@ -16,7 +16,7 @@
 
 void app_main(void)
 {  
-    BaseType_t xReturnedTask[3];
+    BaseType_t xReturnedTask[4];
 
     // configure ldc
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
@@ -29,7 +29,7 @@ void app_main(void)
     ESP_ERROR_CHECK(gpio_isr_handler_add(BTN_START_END, ISR_BTN, NULL));  // hook isr handler for specific gpio pin
 
     // configure i2s
-    ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config_i2s, 32, &xQueueData));
+    ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config_i2s, 32, &xQueueEvent));
     ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins_i2s));
     ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
@@ -37,8 +37,10 @@ void app_main(void)
     parse_config_file(&host, &card, &configurations);
 
     // create semaphores/event groups
+    xQueueData        = xQueueCreate(NUM_QUEUE_BUF,DMA_BUF_LEN_SMPL*sizeof(long)); 
     xEvents           = xEventGroupCreate();
-    xMutex            = xSemaphoreCreateMutex();
+    xMutexREC         = xSemaphoreCreateMutex();
+    xMutexDPS         = xSemaphoreCreateMutex();
     xSemaphoreBTN_ON  = xSemaphoreCreateBinary();
     xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
 
@@ -72,7 +74,7 @@ void app_main(void)
         ESP_LOGI(SETUP_APP_TAG, "Interval between record session will be timed.");
     }
 
-    if(xQueueData == NULL){ // tests if queue creation fails
+    if((xQueueEvent == NULL) || (xQueueData == NULL)){ // tests if queue creation fails
         ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.");
         while(1);
     }
@@ -80,7 +82,7 @@ void app_main(void)
         ESP_LOGE(SETUP_APP_TAG, "Failed to create event group.");
         while(1);
     }
-    if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xMutex == NULL)){ // tests if semaphore creation fails
+    if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xMutexREC == NULL) || (xMutexDPS == NULL)){ // tests if semaphore creation fails
         ESP_LOGE(SETUP_APP_TAG, "Failed to create semaphores.");
         while(1);
     }  
@@ -89,11 +91,12 @@ void app_main(void)
     xEventGroupClearBits(xEvents, BIT_(REC_STARTED));
 
     // create tasks
-    xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART, "taskSTART", 8192, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle, PRO_CPU_NUM);
-    xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskEND,   "taskEND",   8192, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,   PRO_CPU_NUM);
-    xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskREC,   "taskREC",   8192, NULL, configMAX_PRIORITIES-3, &xTaskRECHandle,   APP_CPU_NUM);
+    xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART, "taskSTART", 8192/2, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle, PRO_CPU_NUM);
+    xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskEND,   "taskEND",   8192/2, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,   PRO_CPU_NUM);
+    xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskREC,   "taskREC",   8192/2, NULL, configMAX_PRIORITIES-3, &xTaskRECHandle,   APP_CPU_NUM);
+    xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskDPS,   "taskDPS",   8192/2, NULL, configMAX_PRIORITIES-3, &xTaskDPSHandle,   PRO_CPU_NUM);
    
-    for(int itr=0; itr<3; itr++) // iterate over tasks 
+    for(int itr=0; itr<4; itr++) // iterate over tasks 
     {
         if(xReturnedTask[itr] == pdFAIL){ // tests if task creation fails
             ESP_LOGE(SETUP_APP_TAG, "Failed to create task %d.", itr);
@@ -103,6 +106,7 @@ void app_main(void)
 
     // suspend tasks for recording mode
     vTaskSuspend(xTaskRECHandle);
+    vTaskSuspend(xTaskDPSHandle);
     vTaskSuspend(xTaskENDhandle);
 
     ESP_LOGI(SETUP_APP_TAG, "Successful BOOT!");
@@ -169,7 +173,10 @@ void vTaskSTART(void * pvParameters)
             
             change_color(&ledc_channel, &ledc_timer, configurations.recording_color);
 
+            init_app_cic(&cic);
+
             // resume tasks for recording mode
+            vTaskResume(xTaskDPSHandle);
             vTaskResume(xTaskRECHandle);
             vTaskResume(xTaskENDhandle);
         
@@ -194,10 +201,12 @@ void vTaskEND(void * pvParameters)
             ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
             // wait to get mutex indicating total end of rec task
-            while(xSemaphoreTake(xMutex,portMAX_DELAY)==pdFALSE);
+            while(xSemaphoreTake(xMutexREC,portMAX_DELAY)==pdFALSE);
+            while(xSemaphoreTake(xMutexDPS,portMAX_DELAY)==pdFALSE);
 
             // suspend tasks for recording mode
             vTaskSuspend(xTaskRECHandle);
+            vTaskSuspend(xTaskDPSHandle);
 
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
@@ -222,7 +231,8 @@ void vTaskEND(void * pvParameters)
 
             ESP_LOGI(END_REC_TAG, "Returning to IDLE mode.");
 
-            xSemaphoreGive(xMutex);
+            xSemaphoreGive(xMutexREC);
+            xSemaphoreGive(xMutexDPS);
 
             // start out session timer to time-in when to start recording
             if(configurations.interval_between_record_session>0) 
@@ -245,19 +255,44 @@ void vTaskREC(void * pvParameters)
     while(1)
     {
         if(
-            (xQueueData!=NULL)                               &&
-            (xQueueReceive(xQueueData, &i2s_evt, 0)==pdTRUE) &&
-            (i2s_evt.type == I2S_EVENT_RX_DONE)              &&
-            (xMutex!=NULL)                                   &&
-            (xSemaphoreTake(xMutex,portMAX_DELAY)==pdTRUE)
+            (xQueueEvent!=NULL)                               &&
+            (xQueueReceive(xQueueEvent, &i2s_evt, 0)==pdTRUE) &&
+            (i2s_evt.type == I2S_EVENT_RX_DONE)               &&
+            (xMutexREC!=NULL)                                 &&
+            (xSemaphoreTake(xMutexREC,portMAX_DELAY)==pdTRUE)
         ) // wait for data to be read
         {
-            // ESP_LOGI(SD_CARD_TAG, "Hello SD card!");
-            i2s_read(I2S_PORT_NUM, (void*) dataBuffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
-            fwrite(dataBuffer, bytes_read, 1, session_file); // write buffer to sd card current file
+            // ESP_LOGI(SD_CARD_TAG, "Hello REC task!");
+            i2s_read(I2S_PORT_NUM, (void*) input_buffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
+
+            // enqueue data for next task
+            xQueueSend(xQueueData,&input_buffer,portMAX_DELAY);
+
+            // fwrite(input_buffer, bytes_read, 1, session_file); // write buffer to sd card current file
+			// fsync(fileno(session_file));
+            xSemaphoreGive(xMutexREC);
+        }
+        vTaskDelay(1);
+        // if (evt.type == I2S_EVENT_RX_Q_OVF) printf("RX data dropped\n");
+    }
+}
+
+void vTaskDPS(void * pvParameters)
+{
+    while(1)
+    {
+        if(
+            (xQueueData!=NULL)                                         &&
+            (xQueueReceive(xQueueData, &processing_buffer, 0)==pdTRUE) &&
+            (xMutexDPS!=NULL)                                          &&
+            (xSemaphoreTake(xMutexDPS,portMAX_DELAY)==pdTRUE)
+        ) // wait for data to be read
+        {
+            // ESP_LOGI(SD_CARD_TAG, "Hello DPS task!");
+            process_app_cic(&cic, &processing_buffer, &output_buffer);
+            fwrite(output_buffer, 4*DMA_BUF_LEN_SMPL, 1, session_file); // write buffer to sd card current file
 			fsync(fileno(session_file));
-            xSemaphoreGive(xMutex);
-            //printf("%lx %lx %lx %lx\n", dataBuffer[0], dataBuffer[1], dataBuffer[2], dataBuffer[3]);
+            xSemaphoreGive(xMutexDPS);
         }
         vTaskDelay(1);
         // if (evt.type == I2S_EVENT_RX_Q_OVF) printf("RX data dropped\n");

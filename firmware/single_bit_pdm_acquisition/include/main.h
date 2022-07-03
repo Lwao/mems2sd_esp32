@@ -119,8 +119,9 @@
 #define I2S_PORT_NUM     0
 #define DMA_BUF_COUNT    32
 #define DMA_BUF_LEN_SMPL 1024
-#define BIT_DEPTH I2S_BITS_PER_SAMPLE_32BIT
+#define BIT_DEPTH        I2S_BITS_PER_SAMPLE_32BIT
 #define DATA_BUFFER_SIZE DMA_BUF_LEN_SMPL*BIT_DEPTH/8
+#define NUM_QUEUE_BUF    10
 
 // freetros
 // #define configTICK_RATE_HZ 1000
@@ -242,7 +243,8 @@ ledc_channel_config_t ledc_channel[NUM_LDC] = {
 };
 
 size_t bytes_read; // number of bytes read by i2s_read
-long dataBuffer[DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
+long input_buffer[DMA_BUF_LEN_SMPL], processing_buffer[DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
+short output_buffer[2*DMA_BUF_LEN_SMPL]; // 
 
 // sd card variables
 sdmmc_card_t* card;
@@ -253,16 +255,16 @@ char mount_point[] = MOUNT_POINT; // sd card mounting point
 char *fname;
 
 // freertos variables
+TaskHandle_t xTaskDPSHandle;   // process PDM data from mic [task_handle]
 TaskHandle_t xTaskRECHandle;   // get data from mic and save into sd card [task_handle]
 TaskHandle_t xTaskSTARThandle; // starting routine [task_handle]
 TaskHandle_t xTaskENDhandle;   // ending routine [task_handle]
 
-QueueHandle_t xQueueData;            // data queue for transfering microphone data to sd card [queue_handle]
-EventGroupHandle_t xEvents;          // event group to handle event flags [event_group_handle]
-SemaphoreHandle_t xMutex;            // mutex to allow end of recording only when the spi interface finishes to write into sd card [sempaphore_handle]
-SemaphoreHandle_t xSemaphoreBTN_ON;  // semaphore to interpret button as start button interrupt [semaphore_handle]
-SemaphoreHandle_t xSemaphoreBTN_OFF; // semaphore to interpret button as end button interrupt [semaphore_handle]
-TimerHandle_t xTimerInSession, xTimerOutSession; // software timer to count in-session and out-session time [timer_handle]
+QueueHandle_t xQueueData, xQueueEvent;                 // data and event queue for transfering microphone data to sd card [queue_handle]
+EventGroupHandle_t xEvents;                            // event group to handle event flags [event_group_handle]
+SemaphoreHandle_t xMutexREC, xMutexDPS;                // mutex to allow lock recording and processing tasks [semaphore_handle]
+SemaphoreHandle_t xSemaphoreBTN_ON, xSemaphoreBTN_OFF; // semaphore to interpret button on/off state interrupt [semaphore_handle]
+TimerHandle_t xTimerInSession, xTimerOutSession;       // software timer to count in-session and out-session time [timer_handle]
 
 portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
@@ -272,12 +274,20 @@ struct timeval date = {// struct with date data
 
 config_file_t configurations;
 wav_header_t wav_header;
+app_cic_t cic;
 
 /*
  * Function prototype section
  * --------------------
  * Initialize functions prototypes to later be defined
  */
+
+/**
+ * @brief Task to process input buffer data.
+ *
+ * @param pvParameters freeRTOS task parameters.
+ */
+void vTaskDPS(void * pvParameters);
 
 /**
  * @brief Task to acquire and save audio data into SD card.
