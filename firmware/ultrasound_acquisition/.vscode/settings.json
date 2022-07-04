@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "*.rmd": "markdown",
+        "stdio.h": "c",
+        "array": "c",
+        "string": "c",
+        "string_view": "c",
+        "cstdio": "c",
+        "timer_group_struct.h": "c",
+        "timer_group_reg.h": "c",
+        "queue.h": "c",
+        "cmath": "cpp",
+        "wav_header.h": "c",
+        "esp_err.h": "c",
+        "led_driver.h": "c"
+    }
+}
