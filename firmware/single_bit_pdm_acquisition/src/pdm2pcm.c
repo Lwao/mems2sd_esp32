@@ -123,6 +123,11 @@ void init_app_cic(app_cic_t *cic)
     cic->prev_s2 = 0;
 }
 
+void init_app_fir(app_fir_t *fir)
+{
+    for(int ii=0; ii<FIR_ORDER; ii++) fir->kernel[ii] = (short) 0;
+}
+
 void integ_overflow(app_cic_t *cic)
 {
     cic->acc_s1 = cic->acc_s1>=MAX_OVERFLOW ? cic->acc_s1-MAX_OVERFLOW : cic->acc_s1;
@@ -180,5 +185,19 @@ void process_app_cic(app_cic_t *cic, long (*input_buffer)[SAMPLES], short (*outp
 
             (*output_buffer)[2*ii+jj] = (short) pcm_sample;
         }
+    }
+}
+
+void process_app_fir(app_fir_t *fir, short fir_coeffs[FIR_ORDER], short (*pcm_samples)[2*SAMPLES])
+{
+    int size_fir = FIR_ORDER, size_pcm = 2*SAMPLES;
+    for(int ii=0; ii<size_pcm; ii++)
+    {
+        // update FIR filter kernel with newest sample and clean it
+        fir->kernel[ii % size_fir] = (*pcm_samples)[ii];
+        (*pcm_samples)[ii] = 0;
+
+        // compute next sample with filter kernel's samples
+        for(int jj=0; jj<size_fir; jj++) (*pcm_samples)[ii] += (fir->kernel[jj]*fir_coeffs[( ( (size_fir-1) - jj) + ii+1) % size_fir]);
     }
 }

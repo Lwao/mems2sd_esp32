@@ -23,6 +23,7 @@
 #define BYTE_PER_SAMPLE 4
 #define APPLY_MASK(x,i) (long)((((x>>(31-i))&0x00000001) << 1)-1)
 #define INPUT_SAMPLE_SIZE 32
+#define FIR_ORDER 64
 
 #define MAX_OVERFLOW  1073741823 // (long)(pow(2,30)-1)
 #define MIN_OVERFLOW -1073741824 // (long)(-pow(2,30))
@@ -67,6 +68,11 @@ typedef struct
     long prev_s1;
     long prev_s2;
 } app_cic_t;
+
+typedef struct {
+    short kernel[FIR_ORDER];
+} app_fir_t;
+
 
 /**
  * @brief Initialize FIFO structure with default parameters.
@@ -157,6 +163,13 @@ long swap_bytes_of_word(long x);
 void init_app_cic(app_cic_t *cic);
 
 /**
+ * @brief Initialize App Specific FIR structure with default parameters.
+ *
+ * @param fir Pointer to App Specific FIR structure to be initialized.
+ */
+void init_app_fir(app_fir_t *fir);
+
+/**
  * @brief Check for overflow in integrators' accumulators for App Specific CIC structure.
  *
  * @param cic Pointer to App Specific CIC structure to be used.
@@ -169,5 +182,12 @@ void integ_overflow(app_cic_t *cic);
  * @param cic Pointer to App Specific CIC structure to be used.
  */
 void process_app_cic(app_cic_t *cic, long (*input_buffer)[SAMPLES], short (*output_buffer)[2*SAMPLES]);
+
+/**
+ * @brief Process input buffer with App Specific FIR structure.
+ *
+ * @param cic Pointer to App Specific FIR structure to be used.
+ */
+void process_app_fir(app_fir_t *fir, short fir_coeffs[FIR_ORDER], short (*pcm_samples)[2*SAMPLES]);
 
 #endif // _PDM2PCM_H_

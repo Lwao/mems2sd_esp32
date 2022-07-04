@@ -88,6 +88,7 @@ void get_file_name(config_file_t *configurations)
     	{
         	ESP_LOGI(PARSE_CONFIG_TAG, "File exists: %s", configurations->file_name);
             close_file(&test_file);
+            free(configurations->file_name);
         	configurations->record_file_name_sufix++;
     	}
     	else 

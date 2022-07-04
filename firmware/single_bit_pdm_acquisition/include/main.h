@@ -101,9 +101,7 @@
  * Definition of macros to be used globally in the code
  */
 
-#define SAMPLE_RATE_PDM2PCM 44100
-#define SAMPLE_RATE_PDM 78125 // 75000->4.8MHz, 31250->2MHz, 62500->4MHz, 55kHz->3.52MHz 
-#define SAMPLE_RATE SAMPLE_RATE_PDM
+
 
 // gpio
 #define GPIO_INPUT_PIN_SEL1   (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
@@ -123,8 +121,11 @@
 #define DATA_BUFFER_SIZE DMA_BUF_LEN_SMPL*BIT_DEPTH/8
 #define NUM_QUEUE_BUF    10
 
-// freetros
-// #define configTICK_RATE_HZ 1000
+#define OSR                  16 // pdm oversampling rate
+#define SAMPLE_RATE_STD_PCM  98000 // sample rate used in esp32 internal pdm2pcm conversion during recording in standard mode
+#define SAMPLE_RATE_ULT_PDM  78125 // sample rate used in i2s hack to record raw pdm during recording in ultrasonic mode
+#define I2S_CLOCK_RATE       SAMPLE_RATE_ULT_PDM*2*BIT_DEPTH // i2s clock rate for ultrasonic mode (API adjusted to 5MHz)
+#define SAMPLE_RATE_ULT_PCM  I2S_CLOCK_RATE/OSR // sample rate of resulting pcm audio after pdm2pcm software conversion
 
 // log flags
 #define INIT_SPI_TAG   "init_spi"
@@ -255,14 +256,14 @@ char mount_point[] = MOUNT_POINT; // sd card mounting point
 char *fname;
 
 // freertos variables
-TaskHandle_t xTaskDPSHandle;   // process PDM data from mic [task_handle]
+TaskHandle_t xTaskDSPHandle;   // process PDM data from mic [task_handle]
 TaskHandle_t xTaskRECHandle;   // get data from mic and save into sd card [task_handle]
 TaskHandle_t xTaskSTARThandle; // starting routine [task_handle]
 TaskHandle_t xTaskENDhandle;   // ending routine [task_handle]
 
 QueueHandle_t xQueueData, xQueueEvent;                 // data and event queue for transfering microphone data to sd card [queue_handle]
 EventGroupHandle_t xEvents;                            // event group to handle event flags [event_group_handle]
-SemaphoreHandle_t xMutexREC, xMutexDPS;                // mutex to allow lock recording and processing tasks [semaphore_handle]
+SemaphoreHandle_t xMutexREC, xMutexDSP;                // mutex to allow lock recording and processing tasks [semaphore_handle]
 SemaphoreHandle_t xSemaphoreBTN_ON, xSemaphoreBTN_OFF; // semaphore to interpret button on/off state interrupt [semaphore_handle]
 TimerHandle_t xTimerInSession, xTimerOutSession;       // software timer to count in-session and out-session time [timer_handle]
 
@@ -275,6 +276,13 @@ struct timeval date = {// struct with date data
 config_file_t configurations;
 wav_header_t wav_header;
 app_cic_t cic;
+app_fir_t fir;
+
+short fir_coeffs[FIR_ORDER] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    1, -1, -1, 4, 0, -9, 4, 34, 34, 4, -9, 0, 4, -1, -1, 1, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+};
 
 /*
  * Function prototype section
@@ -287,7 +295,7 @@ app_cic_t cic;
  *
  * @param pvParameters freeRTOS task parameters.
  */
-void vTaskDPS(void * pvParameters);
+void vTaskDSP(void * pvParameters);
 
 /**
  * @brief Task to acquire and save audio data into SD card.

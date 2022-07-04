@@ -40,7 +40,7 @@ void app_main(void)
     xQueueData        = xQueueCreate(NUM_QUEUE_BUF,DMA_BUF_LEN_SMPL*sizeof(long)); 
     xEvents           = xEventGroupCreate();
     xMutexREC         = xSemaphoreCreateMutex();
-    xMutexDPS         = xSemaphoreCreateMutex();
+    xMutexDSP         = xSemaphoreCreateMutex();
     xSemaphoreBTN_ON  = xSemaphoreCreateBinary();
     xSemaphoreBTN_OFF = xSemaphoreCreateBinary();
 
@@ -82,7 +82,7 @@ void app_main(void)
         ESP_LOGE(SETUP_APP_TAG, "Failed to create event group.");
         while(1);
     }
-    if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xMutexREC == NULL) || (xMutexDPS == NULL)){ // tests if semaphore creation fails
+    if((xSemaphoreBTN_ON == NULL) || (xSemaphoreBTN_OFF == NULL) || (xMutexREC == NULL) || (xMutexDSP == NULL)){ // tests if semaphore creation fails
         ESP_LOGE(SETUP_APP_TAG, "Failed to create semaphores.");
         while(1);
     }  
@@ -93,8 +93,8 @@ void app_main(void)
     // create tasks
     xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART, "taskSTART", 8192/2, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle, PRO_CPU_NUM);
     xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskEND,   "taskEND",   8192/2, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,   PRO_CPU_NUM);
-    xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskREC,   "taskREC",   8192/2, NULL, configMAX_PRIORITIES-3, &xTaskRECHandle,   APP_CPU_NUM);
-    xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskDPS,   "taskDPS",   8192/2, NULL, configMAX_PRIORITIES-3, &xTaskDPSHandle,   PRO_CPU_NUM);
+    xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskREC,   "taskREC",   8192/4, NULL, configMAX_PRIORITIES-3, &xTaskRECHandle,   APP_CPU_NUM);
+    xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskDSP,   "taskDSP",   8192/4, NULL, configMAX_PRIORITIES-3, &xTaskDSPHandle,   PRO_CPU_NUM);
    
     for(int itr=0; itr<4; itr++) // iterate over tasks 
     {
@@ -106,7 +106,7 @@ void app_main(void)
 
     // suspend tasks for recording mode
     vTaskSuspend(xTaskRECHandle);
-    vTaskSuspend(xTaskDPSHandle);
+    vTaskSuspend(xTaskDSPHandle);
     vTaskSuspend(xTaskENDhandle);
 
     ESP_LOGI(SETUP_APP_TAG, "Successful BOOT!");
@@ -149,10 +149,11 @@ void vTaskSTART(void * pvParameters)
             settimeofday(&date, NULL); // update time
             
             // open new file in append mode
-            while(session_file==NULL) session_file = open_file(configurations.file_name, "a");
+            // while(session_file==NULL) session_file = open_file(configurations.file_name, "a");
+            while(session_file==NULL) session_file = open_file("rec.wav", "a");
 
             // write first part of .wav header
-            init_wav_header(&session_file, &wav_header, SAMPLE_RATE, BIT_DEPTH);
+            init_wav_header(&session_file, &wav_header, (int)SAMPLE_RATE_ULT_PCM, BIT_DEPTH);
 
             // set flag informing that the recording already started
             xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
@@ -160,7 +161,7 @@ void vTaskSTART(void * pvParameters)
             // start i2s
             ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));        // start i2s clocking mic to low-power mode
             vTaskDelay(100);                                 // structural delay to changes take place
-            i2s_set_sample_rates(I2S_PORT_NUM, SAMPLE_RATE); // change mic to ultrasonic mode
+            i2s_set_sample_rates(I2S_PORT_NUM, SAMPLE_RATE_ULT_PDM); // change mic to ultrasonic mode
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
 
@@ -174,9 +175,10 @@ void vTaskSTART(void * pvParameters)
             change_color(&ledc_channel, &ledc_timer, configurations.recording_color);
 
             init_app_cic(&cic);
+            init_app_fir(&fir);
 
             // resume tasks for recording mode
-            vTaskResume(xTaskDPSHandle);
+            vTaskResume(xTaskDSPHandle);
             vTaskResume(xTaskRECHandle);
             vTaskResume(xTaskENDhandle);
         
@@ -202,22 +204,23 @@ void vTaskEND(void * pvParameters)
 
             // wait to get mutex indicating total end of rec task
             while(xSemaphoreTake(xMutexREC,portMAX_DELAY)==pdFALSE);
-            while(xSemaphoreTake(xMutexDPS,portMAX_DELAY)==pdFALSE);
+            while(xSemaphoreTake(xMutexDSP,portMAX_DELAY)==pdFALSE);
 
             // suspend tasks for recording mode
             vTaskSuspend(xTaskRECHandle);
-            vTaskSuspend(xTaskDPSHandle);
+            vTaskSuspend(xTaskDSPHandle);
 
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
             // finish to write the .wav header by extracting size of payload
-            finish_wav_header(&session_file, &wav_header, configurations.file_name);
+            // finish_wav_header(&session_file, &wav_header, configurations.file_name);
+            finish_wav_header(&session_file, &wav_header, "rec.wav");
 
             // close file in use
             close_file(&session_file);
 
             // engage next file name
-            get_file_name(&configurations);
+            // get_file_name(&configurations);
             
             // dismount SD card and free SPI bus (in the given order) 
             deinitialize_sd_card(&card);
@@ -232,7 +235,7 @@ void vTaskEND(void * pvParameters)
             ESP_LOGI(END_REC_TAG, "Returning to IDLE mode.");
 
             xSemaphoreGive(xMutexREC);
-            xSemaphoreGive(xMutexDPS);
+            xSemaphoreGive(xMutexDSP);
 
             // start out session timer to time-in when to start recording
             if(configurations.interval_between_record_session>0) 
@@ -277,22 +280,23 @@ void vTaskREC(void * pvParameters)
     }
 }
 
-void vTaskDPS(void * pvParameters)
+void vTaskDSP(void * pvParameters)
 {
     while(1)
     {
         if(
             (xQueueData!=NULL)                                         &&
             (xQueueReceive(xQueueData, &processing_buffer, 0)==pdTRUE) &&
-            (xMutexDPS!=NULL)                                          &&
-            (xSemaphoreTake(xMutexDPS,portMAX_DELAY)==pdTRUE)
+            (xMutexDSP!=NULL)                                          &&
+            (xSemaphoreTake(xMutexDSP,portMAX_DELAY)==pdTRUE)
         ) // wait for data to be read
         {
-            // ESP_LOGI(SD_CARD_TAG, "Hello DPS task!");
+            // ESP_LOGI(SD_CARD_TAG, "Hello DSP task!");
             process_app_cic(&cic, &processing_buffer, &output_buffer);
+            process_app_fir(&fir, fir_coeffs, &output_buffer);
             fwrite(output_buffer, 4*DMA_BUF_LEN_SMPL, 1, session_file); // write buffer to sd card current file
 			fsync(fileno(session_file));
-            xSemaphoreGive(xMutexDPS);
+            xSemaphoreGive(xMutexDSP);
         }
         vTaskDelay(1);
         // if (evt.type == I2S_EVENT_RX_Q_OVF) printf("RX data dropped\n");
