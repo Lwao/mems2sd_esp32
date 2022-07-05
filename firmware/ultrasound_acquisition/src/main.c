@@ -17,11 +17,15 @@
 void app_main(void)
 {  
     BaseType_t xReturnedTask[4];
+    int num_tasks;
 
     // configure ldc
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
     for (int ch=0; ch<NUM_LDC; ch++) ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel[ch]));
     change_color(&ledc_channel, &ledc_timer, WHITE_COLOR);
+
+    // parse configuration file from SD card
+    parse_config_file(&host, &card, &configurations);
 
     // configure gpio pins
     ESP_ERROR_CHECK(gpio_config(&in_conf1));                              // initialize input pin 1 configuration - on/off button
@@ -29,15 +33,18 @@ void app_main(void)
     ESP_ERROR_CHECK(gpio_isr_handler_add(BTN_START_END, ISR_BTN, NULL));  // hook isr handler for specific gpio pin
 
     // configure i2s
-    ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config_i2s, 32, &xQueueEvent));
-    ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins_i2s));
+    if(configurations.ultrasound_mode)
+    {
+        ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config_ult, 32, &xQueueEvent));
+        ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins_ult));
+    } else
+    {
+        ESP_ERROR_CHECK(i2s_driver_install(I2S_PORT_NUM, &i2s_config_std, 32, &xQueueEvent));
+        ESP_ERROR_CHECK(i2s_set_pin(I2S_PORT_NUM, &i2s_pins_std));
+    }
     ESP_ERROR_CHECK(i2s_stop(I2S_PORT_NUM));
 
-    // parse configuration file from SD card
-    parse_config_file(&host, &card, &configurations);
-
     // create semaphores/event groups
-    xQueueData        = xQueueCreate(NUM_QUEUE_BUF,DMA_BUF_LEN_SMPL*sizeof(long)); 
     xEvents           = xEventGroupCreate();
     xMutexREC         = xSemaphoreCreateMutex();
     xMutexDSP         = xSemaphoreCreateMutex();
@@ -74,7 +81,7 @@ void app_main(void)
         ESP_LOGI(SETUP_APP_TAG, "Interval between record session will be timed.");
     }
 
-    if((xQueueEvent == NULL) || (xQueueData == NULL)){ // tests if queue creation fails
+    if(xQueueEvent == NULL){ // tests if queue creation fails
         ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.");
         while(1);
     }
@@ -91,12 +98,26 @@ void app_main(void)
     xEventGroupClearBits(xEvents, BIT_(REC_STARTED));
 
     // create tasks
-    xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART, "taskSTART", 8192/2, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle, PRO_CPU_NUM);
-    xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskEND,   "taskEND",   8192/2, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,   PRO_CPU_NUM);
-    xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskREC,   "taskREC",   8192/4, NULL, configMAX_PRIORITIES-3, &xTaskRECHandle,   APP_CPU_NUM);
-    xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskDSP,   "taskDSP",   8192/4, NULL, configMAX_PRIORITIES-3, &xTaskDSPHandle,   PRO_CPU_NUM);
-   
-    for(int itr=0; itr<4; itr++) // iterate over tasks 
+    xReturnedTask[0] = xTaskCreatePinnedToCore(vTaskSTART, "taskSTART", 4096, NULL, configMAX_PRIORITIES-2, &xTaskSTARThandle, PRO_CPU_NUM);
+    xReturnedTask[1] = xTaskCreatePinnedToCore(vTaskEND,   "taskEND",   4096, NULL, configMAX_PRIORITIES-1, &xTaskENDhandle,   PRO_CPU_NUM);
+
+    if(configurations.ultrasound_mode)
+    {
+        xQueueData = xQueueCreate(NUM_QUEUE_BUF,DMA_BUF_LEN_SMPL*sizeof(long)); 
+        if(xQueueData == NULL){ // tests if queue creation fails
+            ESP_LOGE(SETUP_APP_TAG, "Failed to create data queue.");
+            while(1);
+        }
+        xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskREC_ULT, "taskREC_ULT", 2048, NULL, configMAX_PRIORITIES-3, &xTaskRECHandle, APP_CPU_NUM);
+        xReturnedTask[3] = xTaskCreatePinnedToCore(vTaskDSP,     "taskDSP",     2048, NULL, configMAX_PRIORITIES-3, &xTaskDSPHandle, PRO_CPU_NUM);
+        num_tasks=4;
+    } else
+    {
+        xReturnedTask[2] = xTaskCreatePinnedToCore(vTaskREC_STD, "taskREC_STD", 2048, NULL, configMAX_PRIORITIES-3, &xTaskRECHandle, APP_CPU_NUM);
+        num_tasks=3;
+    }
+
+    for(int itr=0; itr<num_tasks; itr++) // iterate over tasks 
     {
         if(xReturnedTask[itr] == pdFAIL){ // tests if task creation fails
             ESP_LOGE(SETUP_APP_TAG, "Failed to create task %d.", itr);
@@ -106,8 +127,8 @@ void app_main(void)
 
     // suspend tasks for recording mode
     vTaskSuspend(xTaskRECHandle);
-    vTaskSuspend(xTaskDSPHandle);
     vTaskSuspend(xTaskENDhandle);
+    if(configurations.ultrasound_mode) vTaskSuspend(xTaskDSPHandle);
 
     ESP_LOGI(SETUP_APP_TAG, "Successful BOOT!");
 
@@ -145,15 +166,12 @@ void vTaskSTART(void * pvParameters)
             while(initialize_sd_card(&host, &card)!=1){vTaskDelay(100);}
             vTaskDelay(100);
             
-            // reset RTC 
-            settimeofday(&date, NULL); // update time
-            
             // open new file in append mode
-            // while(session_file==NULL) session_file = open_file(configurations.file_name, "a");
-            while(session_file==NULL) session_file = open_file("rec.wav", "a");
+            while(session_file==NULL) session_file = fopen(configurations.file_name, "a");
 
             // write first part of .wav header
-            init_wav_header(&session_file, &wav_header, (int)SAMPLE_RATE_ULT_PCM, BIT_DEPTH);
+            if(configurations.ultrasound_mode) init_wav_header(&session_file, &wav_header, (int)SAMPLE_RATE_ULT_PCM, BIT_DEPTH_ULT, configurations.ultrasound_mode);
+            else init_wav_header(&session_file, &wav_header, (int)SAMPLE_RATE_STD_PCM, BIT_DEPTH_STD, configurations.ultrasound_mode);
 
             // set flag informing that the recording already started
             xEventGroupSetBits(xEvents, BIT_(REC_STARTED));
@@ -161,7 +179,8 @@ void vTaskSTART(void * pvParameters)
             // start i2s
             ESP_ERROR_CHECK(i2s_start(I2S_PORT_NUM));        // start i2s clocking mic to low-power mode
             vTaskDelay(100);                                 // structural delay to changes take place
-            i2s_set_sample_rates(I2S_PORT_NUM, SAMPLE_RATE_ULT_PDM); // change mic to ultrasonic mode
+            if(configurations.ultrasound_mode) i2s_set_sample_rates(I2S_PORT_NUM, SAMPLE_RATE_ULT_PDM); // change mic to ultrasonic mode
+            else i2s_set_sample_rates(I2S_PORT_NUM, SAMPLE_RATE_STD_PCM); // change mic to standard mode
 
             ESP_LOGI(START_REC_TAG, "Recording session started.");
 
@@ -178,7 +197,7 @@ void vTaskSTART(void * pvParameters)
             init_app_fir(&fir);
 
             // resume tasks for recording mode
-            vTaskResume(xTaskDSPHandle);
+            if(configurations.ultrasound_mode) vTaskResume(xTaskDSPHandle);
             vTaskResume(xTaskRECHandle);
             vTaskResume(xTaskENDhandle);
         
@@ -208,19 +227,19 @@ void vTaskEND(void * pvParameters)
 
             // suspend tasks for recording mode
             vTaskSuspend(xTaskRECHandle);
-            vTaskSuspend(xTaskDSPHandle);
+            if(configurations.ultrasound_mode) vTaskSuspend(xTaskDSPHandle);
 
             ESP_LOGI(END_REC_TAG, "Recording session finished.");
 
             // finish to write the .wav header by extracting size of payload
-            // finish_wav_header(&session_file, &wav_header, configurations.file_name);
-            finish_wav_header(&session_file, &wav_header, "rec.wav");
+            finish_wav_header(&session_file, &wav_header, configurations.file_name, configurations.ultrasound_mode);
+            // finish_wav_header(&session_file, &wav_header, "rec.wav", configurations.ultrasound_mode);
 
             // close file in use
             close_file(&session_file);
 
             // engage next file name
-            // get_file_name(&configurations);
+            get_file_name(&configurations);
             
             // dismount SD card and free SPI bus (in the given order) 
             deinitialize_sd_card(&card);
@@ -252,7 +271,7 @@ void vTaskEND(void * pvParameters)
     }
 }
 
-void vTaskREC(void * pvParameters)
+void vTaskREC_STD(void * pvParameters)
 {
     i2s_event_t i2s_evt;
     while(1)
@@ -266,13 +285,32 @@ void vTaskREC(void * pvParameters)
         ) // wait for data to be read
         {
             // ESP_LOGI(SD_CARD_TAG, "Hello REC task!");
-            i2s_read(I2S_PORT_NUM, (void*) input_buffer, DATA_BUFFER_SIZE, &bytes_read, portMAX_DELAY); // read bytes from DMA
+            i2s_read(I2S_PORT_NUM, (void*) output_buffer, BUFFER_BYTE_SIZE_STD, &bytes_read, portMAX_DELAY); // read bytes from DMA
+            fwrite(output_buffer, bytes_read, 1, session_file); // write buffer to sd card current file
+			fsync(fileno(session_file));
+            xSemaphoreGive(xMutexREC);
+        }
+        vTaskDelay(1);
+        // if (evt.type == I2S_EVENT_RX_Q_OVF) printf("RX data dropped\n");
+    }
+}
 
-            // enqueue data for next task
-            xQueueSend(xQueueData,&input_buffer,portMAX_DELAY);
-
-            // fwrite(input_buffer, bytes_read, 1, session_file); // write buffer to sd card current file
-			// fsync(fileno(session_file));
+void vTaskREC_ULT(void * pvParameters)
+{
+    i2s_event_t i2s_evt;
+    while(1)
+    {
+        if(
+            (xQueueEvent!=NULL)                               &&
+            (xQueueReceive(xQueueEvent, &i2s_evt, 0)==pdTRUE) &&
+            (i2s_evt.type == I2S_EVENT_RX_DONE)               &&
+            (xMutexREC!=NULL)                                 &&
+            (xSemaphoreTake(xMutexREC,portMAX_DELAY)==pdTRUE)
+        ) // wait for data to be read
+        {
+            // ESP_LOGI(SD_CARD_TAG, "Hello REC task!");
+            i2s_read(I2S_PORT_NUM, (void*) input_buffer, BUFFER_BYTE_SIZE_ULT, &bytes_read, portMAX_DELAY); // read bytes from DMA
+            xQueueSend(xQueueData,&input_buffer,portMAX_DELAY); // enqueue data for next task
             xSemaphoreGive(xMutexREC);
         }
         vTaskDelay(1);

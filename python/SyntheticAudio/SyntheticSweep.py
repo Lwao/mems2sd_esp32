@@ -4,16 +4,21 @@ import sounddevice as sd
 import sys, time, argparse
 
 def gen_audio(fs=44100):
-    t_end = 1
-    fm_ini = 0
-    fm_end = fs/2
+    fs = 44100
+    t_end = 3
+    freq = np.concatenate([np.arange(start=0, stop=22000, step=2500),np.zeros(1)])
 
     t = np.arange(0, t_end, 1/fs)
     n = len(t)
-    f = 5000
-    # data = np.sin(2*np.pi*f*t)
-    data = np.sin(2*np.pi*10000*t)
-    data = data/np.max(data)
+    d = len(freq)
+    m = n//d
+
+    data = np.zeros(n)
+
+    for (i,f) in enumerate(freq): 
+        if i!=d-1: range_ = np.arange(start=i*m, stop=(i+1)*m+1, step=1)
+        else: range_ = np.arange(start=i*m, stop=n, step=1)
+        data[range_] = np.sin(2*np.pi*f*t[range_])
     
     return data, fs
 

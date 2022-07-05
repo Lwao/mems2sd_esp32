@@ -23,7 +23,7 @@
 #define BYTE_PER_SAMPLE 4
 #define APPLY_MASK(x,i) (long)((((x>>(31-i))&0x00000001) << 1)-1)
 #define INPUT_SAMPLE_SIZE 32
-#define FIR_ORDER 256//64
+#define FIR_ORDER 64//256//64
 
 #define MAX_OVERFLOW  1073741823 // (long)(pow(2,30)-1)
 #define MIN_OVERFLOW -1073741824 // (long)(-pow(2,30))

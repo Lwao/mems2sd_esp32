@@ -67,8 +67,9 @@ void swap_byte_order_long(long* l);
  * @param wav_header .wav header structure with standard data.
  * @param sample_rate sample rate used in the recording.
  * @param bit_depth bit depth used for samples in recording.
+ * @param endianness endianness of format (1) for little endian and (0) for big endian
  */
-void init_wav_header(FILE **file, wav_header_t *wav_header, long sample_rate, long bit_depth);
+void init_wav_header(FILE **file, wav_header_t *wav_header, long sample_rate, long bit_depth, int endianness);
 
 /**
  * @brief Finish .wav file header.
@@ -76,7 +77,8 @@ void init_wav_header(FILE **file, wav_header_t *wav_header, long sample_rate, lo
  * @param file file to which finish header.
  * @param wav_header .wav header structure with standard data.
  * @param fname name of file to be manipulated.
+ * @param endianness endianness of format (1) for little endian and (0) for big endian
  */
-void finish_wav_header(FILE **file, wav_header_t *wav_header, char* fname);
+void finish_wav_header(FILE **file, wav_header_t *wav_header, char* fname, int endianness);
 
 #endif // _WAV_HEADER_H_ 

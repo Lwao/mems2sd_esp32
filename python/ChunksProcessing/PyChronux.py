@@ -29,7 +29,7 @@ def plot_array(x, y, text='(x,y)', title='', xlabel='', ylabel='', stem=False):
   fig.update_xaxes(title_text=xlabel, showgrid=True)
   fig.show()
 
-def chunked_pcolormesh(t, f, S, v=[1e-12,1e-4]):
+def chunked_pcolormesh(t, f, S, v=[1e-12,1e-4], lang='en', title=''):
     fig = plt.figure(dpi=100)
     ax = plt.axes()
 
@@ -42,8 +42,15 @@ def chunked_pcolormesh(t, f, S, v=[1e-12,1e-4]):
     for i in range(m+1): 
         ax.pcolormesh(t[i*slice_chunks:(i+1)*slice_chunks], f, S[:,i*slice_chunks:(i+1)*slice_chunks], shading='gouraud', vmin=v[0], vmax=v[1])
     
-    plt.ylabel('Frequency [Hz]')
-    plt.xlabel('Time [sec]')
+    if lang=='en':
+        plt.ylabel('Frequency [Hz]')
+        plt.xlabel('Time [s]')
+    elif lang=='pt':
+        plt.ylabel('Frequência [Hz]')
+        plt.xlabel('Tempo [s]')
+    
+    plt.title(title)
+    
     plt.show()
 
     #fig.savefig('foo.jpg')

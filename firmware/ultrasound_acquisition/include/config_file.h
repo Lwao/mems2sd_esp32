@@ -42,8 +42,10 @@ typedef struct
     int bit_depth;
     int record_session_duration;
     int interval_between_record_session;
+    int ultrasound_mode;
     colors_t recording_color;
-    char* file_name;
+    //char* file_name;
+    char file_name[32];
 } config_file_t;
 
 /**

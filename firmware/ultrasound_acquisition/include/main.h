@@ -1,6 +1,6 @@
 /**
  * @file main.h
- * @brief 
+ * @brief Configure tick rate to 1kHz at menuconfig
  *
  * @author Levy Gabriel da S. G.
  * @date July 24 2021
@@ -101,8 +101,6 @@
  * Definition of macros to be used globally in the code
  */
 
-
-
 // gpio
 #define GPIO_INPUT_PIN_SEL1   (1ULL<<BTN_START_END)  // | (1ULL<<ANOTHER_GPIO)
 #define ESP_INTR_FLAG_DEFAULT 0
@@ -114,18 +112,22 @@
 #define GPIO_OUTPUT_IO GPIO_NUM_16  // gpio 16 - no use
 
 // i2s 
-#define I2S_PORT_NUM     0
-#define DMA_BUF_COUNT    32
-#define DMA_BUF_LEN_SMPL 1024
-#define BIT_DEPTH        I2S_BITS_PER_SAMPLE_32BIT
-#define DATA_BUFFER_SIZE DMA_BUF_LEN_SMPL*BIT_DEPTH/8
-#define NUM_QUEUE_BUF    10
+#define I2S_PORT_NUM         0
+#define DMA_BUF_COUNT        32
+#define DMA_BUF_LEN_SMPL     1024
 
-#define OSR                  16 // pdm oversampling rate
+#define BIT_DEPTH_STD        I2S_BITS_PER_SAMPLE_16BIT
 #define SAMPLE_RATE_STD_PCM  98000 // sample rate used in esp32 internal pdm2pcm conversion during recording in standard mode
-#define SAMPLE_RATE_ULT_PDM  78125 // sample rate used in i2s hack to record raw pdm during recording in ultrasonic mode
-#define I2S_CLOCK_RATE       SAMPLE_RATE_ULT_PDM*2*BIT_DEPTH // i2s clock rate for ultrasonic mode (API adjusted to 5MHz)
-#define SAMPLE_RATE_ULT_PCM  I2S_CLOCK_RATE/OSR // sample rate of resulting pcm audio after pdm2pcm software conversion
+#define BUFFER_BYTE_SIZE_STD DMA_BUF_LEN_SMPL*BIT_DEPTH_STD/8
+
+#define BIT_DEPTH_ULT        I2S_BITS_PER_SAMPLE_32BIT
+#define SAMPLE_RATE_ULT_PDM  78125                               // sample rate used in i2s hack to record raw pdm during recording in ultrasonic mode
+#define BUFFER_BYTE_SIZE_ULT DMA_BUF_LEN_SMPL*BIT_DEPTH_ULT/8
+#define I2S_CLOCK_RATE       SAMPLE_RATE_ULT_PDM*2*BIT_DEPTH_ULT // i2s clock rate for ultrasonic mode (API adjusted to 5MHz)
+#define SAMPLE_RATE_ULT_PCM  I2S_CLOCK_RATE/OSR                  // sample rate of resulting pcm audio after pdm2pcm software conversion
+
+#define NUM_QUEUE_BUF        10
+#define OSR                  16 // pdm oversampling rate in ultrasound mode
 
 // log flags
 #define INIT_SPI_TAG   "init_spi"
@@ -160,11 +162,11 @@ gpio_config_t in_conf1 = {
     .pull_up_en   = 0,                   // disable pull-up mode
 };
 
-// i2s acquisition config
-i2s_config_t i2s_config_pdm = {
+// i2s acquisition config - standard sound mode
+i2s_config_t i2s_config_std = {
     .mode = I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_PDM, // master driver | receiving data (RX) | in PDM modulation  
     .sample_rate = 8000,                                  // sample rate (low power mode) clock=64*smpl_rate
-    .bits_per_sample = BIT_DEPTH,                         // 16bit resolution per sample
+    .bits_per_sample = BIT_DEPTH_STD,                     // 16bit resolution per sample
     .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,         // mono audio configuration
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
@@ -173,29 +175,29 @@ i2s_config_t i2s_config_pdm = {
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1              // interrupt level 1
 };
 
-// i2s pin config
-i2s_pin_config_t i2s_pins_pdm = {
+// i2s pin config - standard sound mode
+i2s_pin_config_t i2s_pins_std = {
     .bck_io_num = I2S_PIN_NO_CHANGE,
     .ws_io_num = MIC_CLOCK_PIN,         // clock pin
     .data_out_num = I2S_PIN_NO_CHANGE,  
     .data_in_num = MIC_DATA_PIN         // data in pin
 };
 
-// i2s acquisition config
-i2s_config_t i2s_config_i2s = {
+// i2s acquisition config - ultrasound mode
+i2s_config_t i2s_config_ult = {
     .mode = I2S_MODE_MASTER | I2S_MODE_RX,                // master driver | receiving data (RX)   
     .sample_rate = 8000,                                  // sample rate (low power mode) clock=2*bit_depth*smpl_rate
-    .bits_per_sample = BIT_DEPTH,                         // 16bit resolution per sample
+    .bits_per_sample = BIT_DEPTH_ULT,                     // 32bit resolution per sample
     .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,         // mono audio configuration (LL Layer defaults right-channel-second(LSB))
     .communication_format = I2S_COMM_FORMAT_STAND_MSB,    // pcm data format
     .dma_buf_count = DMA_BUF_COUNT,                       // number of buffers, 128 max.
     .dma_buf_len = DMA_BUF_LEN_SMPL,                      // size of each buffer, 1024 max.
-    .use_apll = 0,//I2S_CLK_APLL,                             // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
+    .use_apll = I2S_CLK_D2CLK,                            // for high accuracy clock applications, use the APLL_CLK clock source, which has the frequency range of 16 ~ 128 MHz
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,             // interrupt level 1
 };
 
-// i2s pin config
-i2s_pin_config_t i2s_pins_i2s = {
+// i2s pin config - ultrasound mode
+i2s_pin_config_t i2s_pins_ult = {
     .bck_io_num = MIC_CLOCK_PIN,        // clock pin
     .ws_io_num = I2S_PIN_NO_CHANGE,         
     .data_out_num = I2S_PIN_NO_CHANGE,  
@@ -210,7 +212,6 @@ ledc_timer_config_t ledc_timer = {
     .freq_hz          = LDC_FREQUENCY, 
     .clk_cfg          = LEDC_AUTO_CLK
 };
-
 
 // Prepare and then apply the LEDC PWM channel configuration
 ledc_channel_config_t ledc_channel[NUM_LDC] = {
@@ -245,7 +246,7 @@ ledc_channel_config_t ledc_channel[NUM_LDC] = {
 
 size_t bytes_read; // number of bytes read by i2s_read
 long input_buffer[DMA_BUF_LEN_SMPL], processing_buffer[DMA_BUF_LEN_SMPL]; // data buffer to store DMA_BUF_LEN_SMPL samples from i2s
-short output_buffer[2*DMA_BUF_LEN_SMPL]; // 
+short output_buffer[2*DMA_BUF_LEN_SMPL]; 
 
 // sd card variables
 sdmmc_card_t* card;
@@ -269,33 +270,29 @@ TimerHandle_t xTimerInSession, xTimerOutSession;       // software timer to coun
 
 portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
-struct timeval date = {// struct with date data
-    .tv_sec = 0, // current date in seconds (to be fecthed from NTP)
-};
-
 config_file_t configurations;
 wav_header_t wav_header;
 app_cic_t cic;
 app_fir_t fir;
 
-// short fir_coeffs[FIR_ORDER] = {
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-//     1, -1, -1, 4, 0, -9, 4, 34, 34, 4, -9, 0, 4, -1, -1, 1, 
-//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-// };
-
 short fir_coeffs[FIR_ORDER] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, -1, 0, 1, -1, -1, 1, 0, -2, 0, 2, -2, -2, 5, 1, -10, 4, 34, 
-    34, 4, -10, 1, 5, -2, -2, 2, 0, -2, 0, 1, -1, -1, 1, 0, -1, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    1, -1, -1, 4, 0, -9, 4, 34, 34, 4, -9, 0, 4, -1, -1, 1, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 };
+
+// short fir_coeffs[FIR_ORDER] = {
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+//     0, 0, 0, 0, 0, 0, 0, -1, 0, 1, -1, -1, 1, 0, -2, 0, 2, -2, -2, 5, 1, -10, 4, 34, 
+//     34, 4, -10, 1, 5, -2, -2, 2, 0, -2, 0, 1, -1, -1, 1, 0, -1, 0, 0, 0, 0, 0, 0, 0,
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+// };
 
 /*
  * Function prototype section
@@ -304,7 +301,7 @@ short fir_coeffs[FIR_ORDER] = {
  */
 
 /**
- * @brief Task to process input buffer data.
+ * @brief Task to process input buffer data in ultrasound mode.
  *
  * @param pvParameters freeRTOS task parameters.
  */
@@ -315,7 +312,14 @@ void vTaskDSP(void * pvParameters);
  *
  * @param pvParameters freeRTOS task parameters.
  */
-void vTaskREC(void * pvParameters);
+void vTaskREC_STD(void * pvParameters);
+
+/**
+ * @brief Task to acquire and enqueue data for processing.
+ *
+ * @param pvParameters freeRTOS task parameters.
+ */
+void vTaskREC_ULT(void * pvParameters);
 
 /**
  * @brief Task to configure START of recording when receives command to it.

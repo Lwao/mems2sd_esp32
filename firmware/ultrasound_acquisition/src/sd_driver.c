@@ -63,12 +63,12 @@ FILE* open_file(char *filename, char *mode)
     
     if(filename != NULL)
     {
-        char * name = merge_filename(filename);        
+        // char * name = merge_filename(filename);        
 
         // Open file
         ESP_LOGD(SD_DRIVER_TAG, "Opening file.");
-        f = fopen(name, mode);
-        free(name);
+        f = fopen(filename, mode);
+        free(filename);
         if (f == NULL) {
             ESP_LOGD(SD_DRIVER_TAG, "Failed to open file.");
             return NULL;
