@@ -320,6 +320,7 @@ void vTaskREC_ULT(void * pvParameters)
 
 void vTaskDSP(void * pvParameters)
 {
+    // int64_t init_time;
     while(1)
     {
         if(
@@ -330,10 +331,12 @@ void vTaskDSP(void * pvParameters)
         ) // wait for data to be read
         {
             // ESP_LOGI(SD_CARD_TAG, "Hello DSP task!");
+            // init_time = esp_timer_get_time();
             process_app_cic(&cic, &processing_buffer, &output_buffer);
             process_app_fir(&fir, fir_coeffs, &output_buffer);
             fwrite(output_buffer, 4*DMA_BUF_LEN_SMPL, 1, session_file); // write buffer to sd card current file
 			fsync(fileno(session_file));
+            // printf("DSP time: %lldms\n", (esp_timer_get_time()-init_time)/1000);
             xSemaphoreGive(xMutexDSP);
         }
         vTaskDelay(1);

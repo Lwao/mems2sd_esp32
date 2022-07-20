@@ -63,7 +63,7 @@ def get_mag(data, fs):
 
 def pdm_cic_fir_plot(pdm_stream, cic_processed, fir_processed, fs, os, lang='en'):
     np.seterr(divide = 'ignore') 
-    fig, axs = plt.subplots(nrows=1, ncols=3, dpi=100, figsize=(15,3))
+    fig, axs = plt.subplots(nrows=1, ncols=3, dpi=300, figsize=(15,3))
 
     f1, mag1 = get_mag(pdm_stream, fs)
     f2, mag2 = get_mag(cic_processed, fs/os)
@@ -75,7 +75,7 @@ def pdm_cic_fir_plot(pdm_stream, cic_processed, fir_processed, fs, os, lang='en'
 
     print(f"SNR_1 = %f, SNR_2 = %f, SNR_3 = %f" % (a, b, c))
     max_ = np.max(np.array([np.max(mag1), np.max(mag2), np.max(mag3)]))
-    min_ = np.min(np.array([np.min(mag1), np.min(mag2), np.min(mag3)]))
+    min_ = -140#np.min(np.array([np.min(mag1), np.min(mag2), np.min(mag3)]))
 
     axs[0].semilogx(f1, mag1, 'k')
     axs[1].semilogx(f2, mag2, 'k')
@@ -88,7 +88,7 @@ def pdm_cic_fir_plot(pdm_stream, cic_processed, fir_processed, fs, os, lang='en'
     elif lang=='pt':
         axs[0].set_ylabel('Magnitude (dB)')
         axs[0].set_xlabel('Frequência (Hz)'), axs[1].set_xlabel('Frequência (Hz)'), axs[2].set_xlabel('Frequência (Hz)')
-        axs[0].set_title('Fluxo de bits (PDM)'), axs[1].set_title('Saída do filtro CIC'), axs[2].set_title('Saída do filtro FIR')
+        axs[0].set_title('Fluxo de bits original (PDM)'), axs[1].set_title('Saída do filtro CIC'), axs[2].set_title('Saída do filtro CIC+FIR')
     axs[0].grid(True, which="both"), axs[1].grid(True, which="both"), axs[2].grid(True, which="both")
     axs[0].set_ylim([min_-10,max_+5]), axs[1].set_ylim([min_-10,max_+5]), axs[2].set_ylim([min_-10,max_+5])
     plt.show()
