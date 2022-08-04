@@ -123,4 +123,17 @@ As cores do LED podem estar desconfiguradas a depender da versão do protótipo.
 - `OFF_COLOR` (padrão) durante a sessão de gravação, porém essa cor pode ser configurada no arquivo `config.txt`;
 - `RED_COLOR` durante o curto período de finalização de uma gravação;
 
+Estrutura exemplo para o arquivo `config.txt`:
+
+```s
+record_file_name_sufix=42;
+sampling_rate=8000;
+bit_depth=16;
+record_session_duration=-1;
+interval_between_record_session=-1;
+recording_color=0;
+ultrasound_mode=0;
+```
+
 Ao final do uso do sistema, os arquivos de áudio podem ser obtidos do cartão SD no formato `.wav` e com metadata já configurada pelo sistema.
+
