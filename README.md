@@ -4,7 +4,7 @@ O projeto contido neste repositório diz respeito a um sistema de aquisição de
 
 ## Árvore de diretórios
 
-O repositório possui a seguinte distribuição de diretórios:
+O repositório possui a seguinte árvore de diretórios:
 
 ```sh
 📦mems2sd_esp32
@@ -38,46 +38,61 @@ O repositório possui a seguinte distribuição de diretórios:
  ┃ ┗ 📂freeRTOS management
 ```
 
-Apesar do firmware e projetos de demonstração terem sido desenvolvidos de acordo com a estrutura de projeto do PlatformIO, seu código fonte pode ser adaptado para ser utilizado em um projeto do ESP-IDF, exceto para aqueles que expressamente usam o framework do Arduino (verificar `platformio.ini`). 
+Apesar do firmware e projetos de demonstração terem sido desenvolvidos de acordo com a estrutura de projeto do PlatformIO, seu código fonte pode ser adaptado para ser utilizado em um projeto do ESP-IDF, exceto para aqueles que expressamente usam o framework do Arduino (verificar arquivo `platformio.ini` de cada projeto para mais detalhes). 
 
 ## Funcionamento
 
 ### Preparando o firmware
 
-O projeto a ser compilado e carregado no protótipo é o `/firmware/ultrasound_acquisition`. O PlatformIO pode ser utilizado para compilar e carregar o binário de execução. O PlatformIO pode ser instalado a usando o `pip`:
+O projeto a ser compilado e carregado no protótipo é o `/firmware/ultrasound_acquisition`, pois contém a versão mais atualizada do firmware. O PlatformIO pode ser utilizado para compilar e carregar o binário de execução sem a necessidade de configurar a o ESP-IDF. A interface por linha de comando do PlatformIO pode ser instalada usando o gerenciador de pacotes `pip`:
 
 ```
 $ pip install platformio
 ```
 
-É ideal que o caminho do Python e seus scripts esteja no PATH do sistema.
+É ideal que o caminho do Python e seus scripts esteja no PATH do sistema, assim os comandos do PlatformIO podem ser facilmente invocados pelas aliases `platformio` ou `pio`.
 
-Uma vez localizada a pasta do projeto do firmware, compile o binário com o comando:
+Uma vez localizada a pasta do projeto do firmware (pasta raix do projeto onde se encontra o arquivo `platformio.ini`), compile o binário com o seguinte comando:
 
 ```
 $ platformio run -e esp32dev
 ```
 
-Após a compilação terminar com sucesso, carregue o binário no ESP32 com o comando (durante o carregamento o botão de boot deve ser mantido pressionado):
+O argumento `-e` ou `--environment` diz respeito à placa utilizada (e.g. `esp32dev`, `lolin32`, etc.) e é definido pela variável `board` no arquivo `platformio.ini`. Por padrão o *chip* utilizado no protótipo deste produto suporta a placa `esp32dev` sem problemas, assim não há necessidade de modificar o comando acima.
 
-```sh
+Após a compilação terminar com sucesso, carregue o binário no ESP32 com o seguinte comando:
+
+```
 $ platformio run -t upload
 ```
 
-Para verificar o funcionamento do sistema, o monitor serial pdoe ser invocado com o comando (baud rate de acordo com o configurado no `platformio.ini`):
+Durante o carregamento do binário o botão de **boot** deve ser mantido pressionado.
 
-```sh
+Para verificar o funcionamento do sistema, o monitor serial pdoe ser invocado com o comando:
+
+```
 $ platformio device monitor -b 115200
 ```
 
+A velocidade de comunicação da porta serial (argumento `-b` ou `--baud` de *baud rate*) deve ser definida de acordo com o valor configurado no `platformio.ini` para a variável `monitor_speed`, i.e. 115200bps.
+
+O PlatformIO também possui uma IDE que pode ser facilmente baixada como uma extensão do vscode. Dessa forma os comandos acima seriam abstraídos por botões localizados na barra de *status* do vscode. A funcionalidade dos botões mais importantes estão descritas na Figura 1.
+
+<p align="center">
+Figura 1 - Botões da IDE do PlatformIO no vscode.
+</p>
+
+<p align="center">
+    <img src="misc/pio_buttons.jpg" alt="drawing" style="width:60%;" />
+</p>
 
 ### Operando o sistema
 
-Pode ser observado na Figura 1 e 2 o fluxograma que descreve o funcionamento do firmware e o protótipo em PCB do sistema, respectivamente. No protótipo, o switch SW1 possui função de reset e o switch SW2 possui função de boot durante o carregamento do binário e função de **início/fim** (como indicado no fluxograma) da gravação do sistema durante o funcionamento.
+Pode ser observado na Figura 2 e 3 o fluxograma que descreve o funcionamento do firmware e a PCB do protótipo do sistema, respectivamente. No protótipo, o switch SW1 possui a função de reset e o switch SW2 possui função de **boot** durante o carregamento do binário e função de **início/fim** (como indicado no fluxograma) da gravação do sistema de aquisição durante seu funcionamento.
 
 
 <p align="center">
-Figura 1 - Fluxograma do funcionamento do firmware.
+Figura 2 - Fluxograma do funcionamento do firmware.
 </p>
 
 <p align="center">
@@ -85,16 +100,16 @@ Figura 1 - Fluxograma do funcionamento do firmware.
 </p>
 
 <p align="center">
-Figura 2 - Protótipo do sistema de aquisição.
+Figura 3 - Protótipo do sistema de aquisição.
 </p>
 
 <p align="center">
     <img src="misc/prot2_3d.jpg" alt="drawing" style="width:90%;" />
 </p>
 
-O sistema deve ter um cartão micro SD conectado para o correto funcionamento. Além disso o cartão deve conter um arquivo mandatório nomeado `config.txt` para inicializar algumas configuração básica do sistema. Esse arquivo possui as seguintes opções de preenchimento (o valor 1 pode ser entendido como SIM e 0 como NÃO):
+O sistema deve ter um cartão micro SD conectado para o correto funcionamento. Além disso o cartão deve conter um arquivo mandatório nomeado `config.txt` para inicializar algumas configuração básica do sistema. Esse arquivo possui as seguintes opções de preenchimento:
 
-- O campo `record_file_name_sufix` (numérico) funciona como sufixo para o nome do arquivo de áudio de saída. Apesar disso, a cada nova sessão de gravação o sistema soma 1 a esse valor para segmentar cada sessão em um arquivo diferente;
+- O campo `record_file_name_sufix` (numérico) funciona como sufixo para o nome do arquivo de áudio de saída. Apesar disso, a cada nova sessão de gravação o sistema soma 1 a esse valor para segmentar cada sessão em arquivos diferentes. Futuramente este campo pode ser utilizado como uma lista de strings para nomear os arquivos de áudio de uma forma mais complexa;
 - O campo `sampling_rate` (numérico) funciona, atualmente, como um placeholder para uma futura implementação de uma taxa de amostragem ajustável;
 - O campo `bit_depth` (numérico) funciona, atualmente, como um placeholder para uma futura implementação de uma resolução de bits ajustável do áudio de saída;
 - O campo `record_session_duration` (numérico) pode ser utilizado para demarcar a duração, em segundos, de uma sessão de gravação e, caso seja atribuído o valor `-1`, o firmware não vai temporizar a duração das gravações;
@@ -123,7 +138,7 @@ As cores do LED podem estar desconfiguradas a depender da versão do protótipo.
 - `OFF_COLOR` (padrão) durante a sessão de gravação, porém essa cor pode ser configurada no arquivo `config.txt`;
 - `RED_COLOR` durante o curto período de finalização de uma gravação;
 
-Estrutura exemplo para o arquivo `config.txt`:
+Abaixo está apresentada uma estrutura padrão para o arquivo `config.txt`:
 
 ```s
 record_file_name_sufix=42;
@@ -135,5 +150,7 @@ recording_color=0;
 ultrasound_mode=0;
 ```
 
-Ao final do uso do sistema, os arquivos de áudio podem ser obtidos do cartão SD no formato `.wav` e com metadata já configurada pelo sistema.
+Neste exemplo nota-se que a duração das sessões de gravação e os intervalos entre gravações não serão temporizados; durante a gravação o LED assumirá o estado apagado (`OFF_COLOR`); e o áudio será adquirido na faixa audível.
+
+Ao final do uso do sistema, os arquivos de áudio podem ser obtidos do cartão SD no formato `.wav` e com os metadados já configurados pelo sistema.
 
