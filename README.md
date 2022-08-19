@@ -83,7 +83,7 @@ Figura 1 - Botões da IDE do PlatformIO no vscode.
 </p>
 
 <p align="center">
-    <img src="misc/pio_buttons.jpg" alt="drawing" style="width:60%;" />
+    <img src="misc/pio_buttons.jpg" alt="drawing" style="width:40%;" />
 </p>
 
 ### Operando o sistema
